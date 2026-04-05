@@ -91,8 +91,8 @@ actor {
   // OTP storage: phone -> OtpRecord
   let otpStore = Map.empty<Text, OtpRecord>();
 
-  // Fast2SMS API key
-  let fast2smsApiKey = "O0MGa7ghKmN5AL4wvUyln3EzTs6pFWeC89jR1qVuo2tQIDJdSrALoqzYEH6wtm1XlQTBM4aS82fCRPUI";
+  // Retained for upgrade compatibility (previously used for Fast2SMS)
+  let fast2smsApiKey : Text = "O0MGa7ghKmN5AL4wvUyln3EzTs6pFWeC89jR1qVuo2tQIDJdSrALoqzYEH6wtm1XlQTBM4aS82fCRPUI";
 
   // OTP TTL: 2 minutes in nanoseconds
   let OTP_TTL_NS : Int = 2 * 60 * 1_000_000_000;
@@ -119,12 +119,7 @@ actor {
     n.toText();
   };
 
-  // URL-encode spaces for the SMS message
-  func urlEncodeMessage(msg : Text) : Text {
-    msg.replace(#char ' ', "%20");
-  };
-
-  // Send OTP via Fast2SMS
+  // DEMO MODE: Send OTP without SMS - returns OTP in response for testing
   public shared func sendOtp(phone : Text) : async Text {
     if (phone.size() < 7 or phone.size() > 15) {
       Runtime.trap("Invalid phone number");
@@ -136,20 +131,8 @@ actor {
     // Store OTP
     otpStore.add(phone, { otp; expiresAt });
 
-    // Build Fast2SMS GET URL
-    let message = "Your KrishnaBhaktiStore OTP is " # otp # ". Valid for 2 minutes. Do not share.";
-    let encodedMsg = urlEncodeMessage(message);
-    let url = "https://www.fast2sms.com/dev/bulkV2?authorization=" # fast2smsApiKey
-      # "&route=q&message=" # encodedMsg
-      # "&language=english&flash=0&numbers=" # phone;
-
-    let _response = await HttpOutcall.httpGetRequest(
-      url,
-      [{ name = "cache-control"; value = "no-cache" }],
-      transform,
-    );
-
-    "OTP sent successfully"
+    // Return OTP directly (demo mode - no SMS sent)
+    "DEMO:" # otp
   };
 
   // Verify OTP

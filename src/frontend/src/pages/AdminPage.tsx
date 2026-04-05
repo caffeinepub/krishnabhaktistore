@@ -1,3 +1,13 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -27,7 +38,16 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "@tanstack/react-router";
-import { ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Camera,
+  CheckCircle,
+  ImagePlus,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -71,12 +91,19 @@ export function AdminPage() {
   const [formData, setFormData] = useState<ProductFormData>(defaultForm);
   const [saving, setSaving] = useState(false);
 
+  // Delete alert state
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+
   // Image upload state
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>("");
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
+
+  // Track original image URL for edit mode revert
+  const [originalImageUrl, setOriginalImageUrl] = useState<string>("");
 
   const isLoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
 
@@ -114,6 +141,7 @@ export function AdminPage() {
   const openAddDialog = () => {
     setEditingProduct(null);
     setFormData(defaultForm);
+    setOriginalImageUrl("");
     resetImageState();
     setDialogOpen(true);
   };
@@ -129,6 +157,7 @@ export function AdminPage() {
       stockQuantity: product.stockQuantity.toString(),
       isActive: product.isActive,
     });
+    setOriginalImageUrl(product.imageUrl);
     resetImageState();
     setDialogOpen(true);
   };
@@ -144,17 +173,14 @@ export function AdminPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate type and size before accepting
     try {
       validateImageFile(file);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Invalid image file");
-      // Reset the input so the same file can be re-selected after fix
       if (imageInputRef.current) imageInputRef.current.value = "";
       return;
     }
 
-    // Revoke previous blob URL if any
     if (imagePreview?.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreview);
     }
@@ -169,6 +195,10 @@ export function AdminPage() {
     resetImageState();
     if (imageInputRef.current) {
       imageInputRef.current.value = "";
+    }
+    // In edit mode, revert to original image URL
+    if (editingProduct) {
+      setFormData((p) => ({ ...p, imageUrl: originalImageUrl }));
     }
   };
 
@@ -187,7 +217,6 @@ export function AdminPage() {
     try {
       let finalImageUrl = formData.imageUrl;
 
-      // If a file is staged, upload it first
       if (imageFile) {
         setUploading(true);
         try {
@@ -233,7 +262,7 @@ export function AdminPage() {
         setProducts((prev) =>
           prev.map((p) => (p.id === editingProduct.id ? updated : p)),
         );
-        toast.success("Product updated");
+        toast.success("Product updated successfully");
       } else {
         const added = await actor.addProduct(productData);
         setProducts((prev) => [...prev, added]);
@@ -249,15 +278,24 @@ export function AdminPage() {
     }
   };
 
-  const handleDelete = async (product: Product) => {
-    if (!actor || !confirm(`Delete "${product.name}"?`)) return;
+  const confirmDelete = async () => {
+    if (!actor || !productToDelete) return;
     try {
-      await actor.deleteProduct(product.id);
-      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      await actor.deleteProduct(productToDelete.id);
+      setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
       toast.success("Product deleted");
     } catch {
       toast.error("Failed to delete");
+    } finally {
+      setDeleteAlertOpen(false);
+      setProductToDelete(null);
+      setDialogOpen(false);
     }
+  };
+
+  const triggerDelete = (product: Product) => {
+    setProductToDelete(product);
+    setDeleteAlertOpen(true);
   };
 
   const handleStatusChange = async (orderId: bigint, status: OrderStatus) => {
@@ -322,8 +360,12 @@ export function AdminPage() {
     );
   }
 
+  // In edit mode: show blob preview if a new file was picked, else show original URL
+  // In add mode: show blob preview only
   const displayPreview =
     imagePreview || (editingProduct ? formData.imageUrl : "");
+  // Whether the user has staged a new file (blob preview active)
+  const hasNewFile = !!imagePreview && imagePreview.startsWith("blob:");
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -414,7 +456,7 @@ export function AdminPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDelete(product)}
+                          onClick={() => triggerDelete(product)}
                           className="text-destructive hover:text-destructive"
                           data-ocid={`admin.products.delete_button.${index + 1}`}
                         >
@@ -497,16 +539,226 @@ export function AdminPage() {
 
       {/* Product Form Dialog */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-display">
+        <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="font-display text-xl">
               {editingProduct ? "Edit Product" : "Add New Product"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+
+          <div className="space-y-5 py-2">
+            {/* ── IMAGE SECTION (edit mode: full-width preview at top) ── */}
+            {editingProduct ? (
+              <div>
+                <Label className="text-sm font-semibold text-foreground mb-2 block">
+                  Product Image
+                </Label>
+
+                {/* Hidden file input */}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleImageFileChange}
+                />
+
+                {displayPreview ? (
+                  <div className="relative rounded-xl overflow-hidden border border-border bg-muted">
+                    <img
+                      src={displayPreview}
+                      alt="Product preview"
+                      className="w-full h-48 object-cover"
+                    />
+                    {/* X button — only shown when a new file is staged */}
+                    {hasNewFile && (
+                      <button
+                        type="button"
+                        onClick={handleClearImage}
+                        className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-colors"
+                        aria-label="Revert to original image"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  // No image yet — show upload placeholder
+                  <button
+                    type="button"
+                    className="w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/40 py-10 cursor-pointer hover:bg-muted/60 transition-colors"
+                    onClick={() => imageInputRef.current?.click()}
+                    data-ocid="admin.product.image.dropzone"
+                  >
+                    <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload image
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">
+                      JPG, PNG, WebP · max 2 MB
+                    </p>
+                  </button>
+                )}
+
+                {/* Change Image button */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-3 w-full h-11 text-base"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploading || saving}
+                  data-ocid="admin.product.image.upload_button"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  {hasNewFile
+                    ? "Change Image"
+                    : displayPreview
+                      ? "Change Image"
+                      : "Upload Image"}
+                </Button>
+
+                {/* Staged file name */}
+                {imageFile && (
+                  <p className="mt-1.5 text-xs text-muted-foreground text-center truncate">
+                    {imageFile.name}
+                  </p>
+                )}
+
+                {/* Upload progress */}
+                {uploading && (
+                  <div
+                    className="mt-2 space-y-1"
+                    data-ocid="admin.product.image.loading_state"
+                  >
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Uploading image…</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-1.5" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ADD mode — original image section with URL fallback */
+              <div>
+                <Label className="text-sm font-semibold text-foreground mb-2 block">
+                  Product Image
+                </Label>
+
+                {/* Hidden file input */}
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleImageFileChange}
+                />
+
+                {displayPreview ? (
+                  <div className="mt-2 relative rounded-lg overflow-hidden border border-border bg-muted">
+                    <img
+                      src={displayPreview}
+                      alt="Product preview"
+                      className="w-full h-40 object-cover rounded-lg"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleClearImage}
+                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                      aria-label="Remove image"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="mt-2 w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/40 py-8 cursor-pointer hover:bg-muted/60 transition-colors"
+                    onClick={() => imageInputRef.current?.click()}
+                    data-ocid="admin.product.image.dropzone"
+                  >
+                    <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload image
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">
+                      JPG, PNG, WebP supported
+                    </p>
+                  </button>
+                )}
+
+                <div className="mt-2 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploading || saving}
+                    data-ocid="admin.product.image.upload_button"
+                  >
+                    <ImagePlus className="h-4 w-4 mr-1.5" />
+                    {imageFile ? "Change Image" : "Upload Image"}
+                  </Button>
+                  {imageFile && (
+                    <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                      {imageFile.name}
+                    </span>
+                  )}
+                </div>
+
+                {uploading && (
+                  <div
+                    className="mt-2 space-y-1"
+                    data-ocid="admin.product.image.loading_state"
+                  >
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Uploading image…</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-1.5" />
+                  </div>
+                )}
+
+                {/* Optional image URL fallback — ADD mode only */}
+                <div className="mt-3">
+                  <Label
+                    htmlFor="p-image"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Or paste an image URL (optional)
+                  </Label>
+                  <Input
+                    id="p-image"
+                    value={formData.imageUrl}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, imageUrl: e.target.value }))
+                    }
+                    placeholder="https://..."
+                    className="mt-1 text-sm"
+                    disabled={!!imageFile}
+                    data-ocid="admin.product.image_url.input"
+                  />
+                  {imageFile && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Uploaded image will be used instead of the URL.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <Separator className="my-1" />
+
+            {/* ── TEXT FIELDS ── */}
+
             {/* Name */}
             <div>
-              <Label htmlFor="p-name">Name *</Label>
+              <Label
+                htmlFor="p-name"
+                className="text-sm font-semibold text-foreground mb-1 block"
+              >
+                Product Name *
+              </Label>
               <Input
                 id="p-name"
                 value={formData.name}
@@ -514,14 +766,19 @@ export function AdminPage() {
                   setFormData((p) => ({ ...p, name: e.target.value }))
                 }
                 placeholder="Product name"
-                className="mt-1"
+                className="h-12 text-base"
                 data-ocid="admin.product.name.input"
               />
             </div>
 
             {/* Description */}
             <div>
-              <Label htmlFor="p-desc">Description</Label>
+              <Label
+                htmlFor="p-desc"
+                className="text-sm font-semibold text-foreground mb-1 block"
+              >
+                Description
+              </Label>
               <Textarea
                 id="p-desc"
                 value={formData.description}
@@ -529,8 +786,8 @@ export function AdminPage() {
                   setFormData((p) => ({ ...p, description: e.target.value }))
                 }
                 placeholder="Product description"
-                className="mt-1"
-                rows={3}
+                rows={4}
+                className="text-base resize-none"
                 data-ocid="admin.product.description.textarea"
               />
             </div>
@@ -538,7 +795,12 @@ export function AdminPage() {
             {/* Price & Stock */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="p-price">Price (₹) *</Label>
+                <Label
+                  htmlFor="p-price"
+                  className="text-sm font-semibold text-foreground mb-1 block"
+                >
+                  Price (₹) *
+                </Label>
                 <Input
                   id="p-price"
                   type="number"
@@ -548,12 +810,17 @@ export function AdminPage() {
                     setFormData((p) => ({ ...p, priceCents: e.target.value }))
                   }
                   placeholder="0.00"
-                  className="mt-1"
+                  className="h-12 text-base"
                   data-ocid="admin.product.price.input"
                 />
               </div>
               <div>
-                <Label htmlFor="p-stock">Stock</Label>
+                <Label
+                  htmlFor="p-stock"
+                  className="text-sm font-semibold text-foreground mb-1 block"
+                >
+                  Stock
+                </Label>
                 <Input
                   id="p-stock"
                   type="number"
@@ -564,7 +831,7 @@ export function AdminPage() {
                       stockQuantity: e.target.value,
                     }))
                   }
-                  className="mt-1"
+                  className="h-12 text-base"
                   data-ocid="admin.product.stock.input"
                 />
               </div>
@@ -572,7 +839,12 @@ export function AdminPage() {
 
             {/* Category */}
             <div>
-              <Label htmlFor="p-category">Category</Label>
+              <Label
+                htmlFor="p-category"
+                className="text-sm font-semibold text-foreground mb-1 block"
+              >
+                Category
+              </Label>
               <Select
                 value={formData.category}
                 onValueChange={(val) =>
@@ -583,7 +855,7 @@ export function AdminPage() {
                 }
               >
                 <SelectTrigger
-                  className="mt-1"
+                  className="h-12 text-base"
                   data-ocid="admin.product.category.select"
                 >
                   <SelectValue />
@@ -596,138 +868,99 @@ export function AdminPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {/* Image Upload Section */}
-            <div>
-              <Label>Product Image</Label>
-
-              {/* Hidden file input */}
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                className="hidden"
-                onChange={handleImageFileChange}
-              />
-
-              {/* Image preview area */}
-              {displayPreview ? (
-                <div className="mt-2 relative rounded-lg overflow-hidden border border-border bg-muted">
-                  <img
-                    src={displayPreview}
-                    alt="Product preview"
-                    className="w-full h-40 object-cover rounded-lg"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleClearImage}
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                    aria-label="Remove image"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="mt-2 w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/40 py-8 cursor-pointer hover:bg-muted/60 transition-colors"
-                  onClick={() => imageInputRef.current?.click()}
-                  data-ocid="admin.product.image.dropzone"
-                >
-                  <ImagePlus className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Click to upload image
-                  </p>
-                  <p className="text-xs text-muted-foreground/70">
-                    JPG, PNG, GIF, WebP supported
-                  </p>
-                </button>
-              )}
-
-              {/* Upload button row */}
-              <div className="mt-2 flex items-center gap-2">
+          {/* ── FOOTER BUTTONS ── */}
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4">
+            {editingProduct ? (
+              <>
+                {/* Delete Product button — triggers AlertDialog */}
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  onClick={() => imageInputRef.current?.click()}
-                  disabled={uploading || saving}
-                  data-ocid="admin.product.image.upload_button"
+                  className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground h-12 sm:w-auto w-full"
+                  onClick={() => triggerDelete(editingProduct)}
+                  disabled={saving || uploading}
+                  data-ocid="admin.product.dialog.delete_button"
                 >
-                  <ImagePlus className="h-4 w-4 mr-1.5" />
-                  {imageFile ? "Change Image" : "Upload Image"}
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Product
                 </Button>
-                {imageFile && (
-                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
-                    {imageFile.name}
-                  </span>
-                )}
-              </div>
 
-              {/* Upload progress bar */}
-              {uploading && (
-                <div
-                  className="mt-2 space-y-1"
-                  data-ocid="admin.product.image.loading_state"
+                {/* Update Product button */}
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || uploading}
+                  className="flex-1 h-12 text-base bg-primary text-primary-foreground"
+                  data-ocid="admin.product.dialog.submit_button"
                 >
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Uploading image…</span>
-                    <span>{uploadProgress}%</span>
-                  </div>
-                  <Progress value={uploadProgress} className="h-1.5" />
-                </div>
-              )}
-
-              {/* Optional image URL fallback */}
-              <div className="mt-3">
-                <Label
-                  htmlFor="p-image"
-                  className="text-xs text-muted-foreground"
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  {saving ? "Saving…" : "Update Product"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => handleDialogOpenChange(false)}
+                  data-ocid="admin.product.dialog.cancel_button"
                 >
-                  Or paste an image URL (optional)
-                </Label>
-                <Input
-                  id="p-image"
-                  value={formData.imageUrl}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, imageUrl: e.target.value }))
-                  }
-                  placeholder="https://..."
-                  className="mt-1 text-sm"
-                  disabled={!!imageFile}
-                  data-ocid="admin.product.image_url.input"
-                />
-                {imageFile && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Uploaded image will be used instead of the URL.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => handleDialogOpenChange(false)}
-              data-ocid="admin.product.dialog.cancel_button"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving || uploading}
-              className="bg-primary text-primary-foreground"
-              data-ocid="admin.product.dialog.submit_button"
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : null}
-              {editingProduct ? "Update" : "Add"} Product
-            </Button>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || uploading}
+                  className="flex-1 h-12 text-base bg-primary text-primary-foreground"
+                  data-ocid="admin.product.dialog.submit_button"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  {saving ? "Saving…" : "Add Product"}
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation AlertDialog */}
+      <AlertDialog
+        open={deleteAlertOpen}
+        onOpenChange={(open) => {
+          setDeleteAlertOpen(open);
+          if (!open) setProductToDelete(null);
+        }}
+      >
+        <AlertDialogContent data-ocid="admin.delete.dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Product</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">
+                {productToDelete?.name}
+              </span>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-ocid="admin.delete.cancel_button">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-ocid="admin.delete.confirm_button"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

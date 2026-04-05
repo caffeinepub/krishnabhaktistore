@@ -21,6 +21,7 @@ export function LoginPage() {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   async function handleSendOtp() {
     const digits = phoneNumber.replace(/\D/g, "");
@@ -36,11 +37,22 @@ export function LoginPage() {
 
     setIsSending(true);
     try {
-      await actor.sendOtp(digits);
-      toast.success("OTP sent to your phone!", {
-        description: "Enter the 6-digit code you received via SMS.",
-        duration: 5000,
-      });
+      const response = await actor.sendOtp(digits);
+      if (typeof response === "string" && response.startsWith("DEMO:")) {
+        const demoCode = response.slice(5);
+        setOtp(demoCode);
+        setIsDemoMode(true);
+        toast.info(`Demo mode: OTP is ${demoCode}`, {
+          description: "Enter this code to log in.",
+          duration: 6000,
+        });
+      } else {
+        setIsDemoMode(false);
+        toast.success("OTP sent to your phone!", {
+          description: "Enter the 6-digit code you received via SMS.",
+          duration: 5000,
+        });
+      }
       setStep("otp");
     } catch (err: unknown) {
       const message =
@@ -88,10 +100,12 @@ export function LoginPage() {
   function handleChangeNumber() {
     setStep("phone");
     setOtp("");
+    setIsDemoMode(false);
   }
 
   function handleResendOtp() {
     setOtp("");
+    setIsDemoMode(false);
     handleSendOtp();
   }
 
@@ -186,6 +200,13 @@ export function LoginPage() {
                     <p className="text-xs text-amber-600">
                       OTP expires in 2 minutes
                     </p>
+                    {isDemoMode && (
+                      <div className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
+                        <p className="text-xs text-amber-700 font-medium">
+                          Demo mode: No SMS sent. OTP is pre-filled above.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
