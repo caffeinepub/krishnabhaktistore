@@ -83,6 +83,11 @@ actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
+  // Pre-assign admin role to the store owner's Principal
+  let ownerPrincipal = Principal.fromText("6yb43-vmf7k-bflbc-pu74g-uhytl-4ha37-gz7m3-imf7y-ovax2-7r4rr-eae");
+  accessControlState.userRoles.add(ownerPrincipal, #admin);
+  accessControlState.adminAssigned := true;
+
   // Sample Products
   let sampleProducts : [Product] = [
     // Books

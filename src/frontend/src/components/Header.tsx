@@ -1,6 +1,6 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { ShoppingCart, User } from "lucide-react";
-import React from "react";
+import { Copy, ShoppingCart, User } from "lucide-react";
+import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
@@ -9,6 +9,8 @@ export function Header() {
   const { identity, login, clear } = useInternetIdentity();
   const location = useLocation();
   const isLoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
+  const principalId = isLoggedIn ? identity.getPrincipal().toText() : null;
+  const [copied, setCopied] = useState(false);
 
   const navLinks = [
     { to: "/", label: "Home" },
@@ -16,6 +18,14 @@ export function Header() {
     { to: "/products?category=incense", label: "Incense" },
     { to: "/products", label: "All Products" },
   ];
+
+  const handleCopy = () => {
+    if (principalId) {
+      navigator.clipboard.writeText(principalId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   return (
     <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
@@ -57,6 +67,25 @@ export function Header() {
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <>
+                {/* Principal ID display */}
+                <div className="hidden sm:flex items-center gap-1.5 bg-muted rounded px-2 py-1">
+                  <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
+                    {principalId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    title="Copy Principal ID"
+                    className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </button>
+                  {copied && (
+                    <span className="text-[10px] text-green-600 font-medium">
+                      Copied!
+                    </span>
+                  )}
+                </div>
                 <Link
                   to="/admin"
                   className="hidden sm:block text-xs uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"

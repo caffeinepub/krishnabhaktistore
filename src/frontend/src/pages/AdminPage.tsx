@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -26,13 +27,15 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import { ImagePlus, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Order, Product } from "../backend";
 import { OrderStatus, ProductCategory } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { uploadImageFile } from "../utils/imageUpload";
 
 interface ProductFormData {
   name: string;
@@ -68,7 +71,24 @@ export function AdminPage() {
   const [formData, setFormData] = useState<ProductFormData>(defaultForm);
   const [saving, setSaving] = useState(false);
 
+  // Image upload state
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploading, setUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const isLoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
+
+  const resetImageState = () => {
+    if (imagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setImageFile(null);
+    setImagePreview("");
+    setUploadProgress(0);
+    setUploading(false);
+  };
 
   useEffect(() => {
     if (!actor) return;
@@ -94,6 +114,7 @@ export function AdminPage() {
   const openAddDialog = () => {
     setEditingProduct(null);
     setFormData(defaultForm);
+    resetImageState();
     setDialogOpen(true);
   };
 
@@ -108,20 +129,82 @@ export function AdminPage() {
       stockQuantity: product.stockQuantity.toString(),
       isActive: product.isActive,
     });
+    resetImageState();
     setDialogOpen(true);
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    if (!open) {
+      resetImageState();
+    }
+    setDialogOpen(open);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Revoke previous blob URL if any
+    if (imagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setImageFile(file);
+    setImagePreview(previewUrl);
+    setUploadProgress(0);
+  };
+
+  const handleClearImage = () => {
+    resetImageState();
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
   };
 
   const handleSave = async () => {
     if (!actor) return;
+    if (!formData.name.trim()) {
+      toast.error("Product name is required");
+      return;
+    }
+    if (!formData.priceCents || Number(formData.priceCents) <= 0) {
+      toast.error("A valid price is required");
+      return;
+    }
+
     setSaving(true);
     try {
+      let finalImageUrl = formData.imageUrl;
+
+      // If a file is staged, upload it first
+      if (imageFile) {
+        setUploading(true);
+        try {
+          finalImageUrl = await uploadImageFile(imageFile, (pct) => {
+            setUploadProgress(pct);
+          });
+        } catch (uploadErr) {
+          const msg =
+            uploadErr instanceof Error
+              ? uploadErr.message
+              : "Image upload failed";
+          toast.error(`Image upload failed: ${msg}`);
+          setSaving(false);
+          setUploading(false);
+          return;
+        } finally {
+          setUploading(false);
+        }
+      }
+
       const productData: Product = {
         id: editingProduct?.id ?? 0n,
         name: formData.name,
         description: formData.description,
         priceCents: BigInt(Math.round(Number(formData.priceCents) * 100)),
         category: formData.category,
-        imageUrl: formData.imageUrl,
+        imageUrl: finalImageUrl,
         stockQuantity: BigInt(Number(formData.stockQuantity)),
         isActive: formData.isActive,
       };
@@ -141,6 +224,7 @@ export function AdminPage() {
         toast.success("Product added");
       }
       setDialogOpen(false);
+      resetImageState();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save";
       toast.error(msg);
@@ -186,6 +270,7 @@ export function AdminPage() {
         <Button
           onClick={login}
           className="bg-primary hover:bg-primary/90 text-primary-foreground uppercase tracking-wider"
+          data-ocid="admin.login.button"
         >
           Login with Internet Identity
         </Button>
@@ -195,7 +280,10 @@ export function AdminPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div
+        className="flex items-center justify-center py-20"
+        data-ocid="admin.loading_state"
+      >
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -218,6 +306,9 @@ export function AdminPage() {
     );
   }
 
+  const displayPreview =
+    imagePreview || (editingProduct ? formData.imageUrl : "");
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <h1 className="font-display text-3xl font-bold uppercase tracking-wider text-primary mb-8">
@@ -226,10 +317,12 @@ export function AdminPage() {
 
       <Tabs defaultValue="products">
         <TabsList className="mb-6">
-          <TabsTrigger value="products">
+          <TabsTrigger value="products" data-ocid="admin.products.tab">
             Products ({products.length})
           </TabsTrigger>
-          <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
+          <TabsTrigger value="orders" data-ocid="admin.orders.tab">
+            Orders ({orders.length})
+          </TabsTrigger>
         </TabsList>
 
         {/* Products Tab */}
@@ -240,12 +333,13 @@ export function AdminPage() {
               onClick={openAddDialog}
               size="sm"
               className="bg-primary text-primary-foreground"
+              data-ocid="admin.add_product.button"
             >
               <Plus className="h-4 w-4 mr-1" /> Add Product
             </Button>
           </div>
           <div className="rounded-lg border border-border overflow-hidden bg-card">
-            <Table>
+            <Table data-ocid="admin.products.table">
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
@@ -257,8 +351,11 @@ export function AdminPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.map((product) => (
-                  <TableRow key={product.id.toString()}>
+                {products.map((product, index) => (
+                  <TableRow
+                    key={product.id.toString()}
+                    data-ocid={`admin.products.row.${index + 1}`}
+                  >
                     <TableCell className="font-medium">
                       {product.name}
                     </TableCell>
@@ -294,6 +391,7 @@ export function AdminPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => openEditDialog(product)}
+                          data-ocid={`admin.products.edit_button.${index + 1}`}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -302,6 +400,7 @@ export function AdminPage() {
                           variant="outline"
                           onClick={() => handleDelete(product)}
                           className="text-destructive hover:text-destructive"
+                          data-ocid={`admin.products.delete_button.${index + 1}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -318,12 +417,15 @@ export function AdminPage() {
         <TabsContent value="orders">
           <h2 className="text-lg font-semibold mb-4">All Orders</h2>
           {orders.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div
+              className="text-center py-12 text-muted-foreground"
+              data-ocid="admin.orders.empty_state"
+            >
               No orders yet.
             </div>
           ) : (
             <div className="rounded-lg border border-border overflow-hidden bg-card">
-              <Table>
+              <Table data-ocid="admin.orders.table">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Order ID</TableHead>
@@ -378,14 +480,15 @@ export function AdminPage() {
       </Tabs>
 
       {/* Product Form Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">
               {editingProduct ? "Edit Product" : "Add New Product"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Name */}
             <div>
               <Label htmlFor="p-name">Name *</Label>
               <Input
@@ -396,8 +499,11 @@ export function AdminPage() {
                 }
                 placeholder="Product name"
                 className="mt-1"
+                data-ocid="admin.product.name.input"
               />
             </div>
+
+            {/* Description */}
             <div>
               <Label htmlFor="p-desc">Description</Label>
               <Textarea
@@ -409,8 +515,11 @@ export function AdminPage() {
                 placeholder="Product description"
                 className="mt-1"
                 rows={3}
+                data-ocid="admin.product.description.textarea"
               />
             </div>
+
+            {/* Price & Stock */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="p-price">Price (₹) *</Label>
@@ -424,6 +533,7 @@ export function AdminPage() {
                   }
                   placeholder="0.00"
                   className="mt-1"
+                  data-ocid="admin.product.price.input"
                 />
               </div>
               <div>
@@ -439,9 +549,12 @@ export function AdminPage() {
                     }))
                   }
                   className="mt-1"
+                  data-ocid="admin.product.stock.input"
                 />
               </div>
             </div>
+
+            {/* Category */}
             <div>
               <Label htmlFor="p-category">Category</Label>
               <Select
@@ -453,7 +566,10 @@ export function AdminPage() {
                   }))
                 }
               >
-                <SelectTrigger className="mt-1">
+                <SelectTrigger
+                  className="mt-1"
+                  data-ocid="admin.product.category.select"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -464,27 +580,129 @@ export function AdminPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Image Upload Section */}
             <div>
-              <Label htmlFor="p-image">Image URL</Label>
-              <Input
-                id="p-image"
-                value={formData.imageUrl}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, imageUrl: e.target.value }))
-                }
-                placeholder="https://..."
-                className="mt-1"
+              <Label>Product Image</Label>
+
+              {/* Hidden file input */}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageFileChange}
               />
+
+              {/* Image preview area */}
+              {displayPreview ? (
+                <div className="mt-2 relative rounded-lg overflow-hidden border border-border bg-muted">
+                  <img
+                    src={displayPreview}
+                    alt="Product preview"
+                    className="w-full h-40 object-cover rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleClearImage}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="mt-2 w-full flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border bg-muted/40 py-8 cursor-pointer hover:bg-muted/60 transition-colors"
+                  onClick={() => imageInputRef.current?.click()}
+                  data-ocid="admin.product.image.dropzone"
+                >
+                  <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Click to upload image
+                  </p>
+                  <p className="text-xs text-muted-foreground/70">
+                    JPG, PNG, GIF, WebP supported
+                  </p>
+                </button>
+              )}
+
+              {/* Upload button row */}
+              <div className="mt-2 flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploading || saving}
+                  data-ocid="admin.product.image.upload_button"
+                >
+                  <ImagePlus className="h-4 w-4 mr-1.5" />
+                  {imageFile ? "Change Image" : "Upload Image"}
+                </Button>
+                {imageFile && (
+                  <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                    {imageFile.name}
+                  </span>
+                )}
+              </div>
+
+              {/* Upload progress bar */}
+              {uploading && (
+                <div
+                  className="mt-2 space-y-1"
+                  data-ocid="admin.product.image.loading_state"
+                >
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Uploading image…</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1.5" />
+                </div>
+              )}
+
+              {/* Optional image URL fallback */}
+              <div className="mt-3">
+                <Label
+                  htmlFor="p-image"
+                  className="text-xs text-muted-foreground"
+                >
+                  Or paste an image URL (optional)
+                </Label>
+                <Input
+                  id="p-image"
+                  value={formData.imageUrl}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, imageUrl: e.target.value }))
+                  }
+                  placeholder="https://..."
+                  className="mt-1 text-sm"
+                  disabled={!!imageFile}
+                  data-ocid="admin.product.image_url.input"
+                />
+                {imageFile && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Uploaded image will be used instead of the URL.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => handleDialogOpenChange(false)}
+              data-ocid="admin.product.dialog.cancel_button"
+            >
               Cancel
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || uploading}
               className="bg-primary text-primary-foreground"
+              data-ocid="admin.product.dialog.submit_button"
             >
               {saving ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
