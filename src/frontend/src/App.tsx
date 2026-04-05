@@ -8,6 +8,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import React from "react";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Header } from "./components/Header";
 import { CartProvider } from "./context/CartContext";
 import { InternetIdentityProvider } from "./hooks/useInternetIdentity";
@@ -103,13 +104,15 @@ declare module "@tanstack/react-router" {
 
 export function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <InternetIdentityProvider>
-        <CartProvider>
-          <RouterProvider router={router} />
-        </CartProvider>
-      </InternetIdentityProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <InternetIdentityProvider>
+          <CartProvider>
+            <RouterProvider router={router} />
+          </CartProvider>
+        </InternetIdentityProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
