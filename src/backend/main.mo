@@ -74,6 +74,14 @@ actor {
     address : Text;
   };
 
+  // Site content type
+  public type SiteContent = {
+    homepageTitle : Text;
+    bannerText : Text;
+    aboutSection : Text;
+    contactInfo : Text;
+  };
+
   // OTP record
   type OtpRecord = {
     otp : Text;
@@ -90,6 +98,14 @@ actor {
   let phoneRegistry = Map.empty<Text, Text>();
   // OTP storage: phone -> OtpRecord
   let otpStore = Map.empty<Text, OtpRecord>();
+
+  // Site content storage (single record)
+  var siteContent : SiteContent = {
+    homepageTitle = "Divine Devotion Delivered";
+    bannerText = "Explore sacred ISKCON books and premium incense sticks. Bring the fragrance of devotion into your home.";
+    aboutSection = "Spreading the teachings of Lord Krishna through sacred books and devotional items.";
+    contactInfo = "Hare Krishna Hare Krishna\nKrishna Krishna Hare Hare\nHare Rama Hare Rama\nRama Rama Hare Hare";
+  };
 
   // Retained for upgrade compatibility (previously used for Fast2SMS)
   let fast2smsApiKey : Text = "O0MGa7ghKmN5AL4wvUyln3EzTs6pFWeC89jR1qVuo2tQIDJdSrALoqzYEH6wtm1XlQTBM4aS82fCRPUI";
@@ -112,7 +128,6 @@ actor {
   };
 
   // Generate a 6-digit OTP from time-based entropy
-  // Returns a 6-character text like "123456"
   func generateOtp() : Text {
     let t : Int = Time.now();
     let n : Nat = Int.abs(t % 900000) + 100000;
@@ -155,6 +170,23 @@ actor {
       };
     };
   };
+
+  // ── SITE CONTENT ─────────────────────────────────────────────────────────────
+
+  // Get site content - public
+  public query func getSiteContent() : async SiteContent {
+    siteContent
+  };
+
+  // Update site content - admin only
+  public shared ({ caller }) func updateSiteContent(content : SiteContent) : async () {
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Runtime.trap("Unauthorized: Only admins can update site content");
+    };
+    siteContent := content;
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Sample Products
   let sampleProducts : [Product] = [

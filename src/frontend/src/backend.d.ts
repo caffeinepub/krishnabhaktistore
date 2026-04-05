@@ -31,6 +31,12 @@ export interface UserProfile {
     address: string;
     phone: string;
 }
+export interface SiteContent {
+    homepageTitle: string;
+    bannerText: string;
+    aboutSection: string;
+    contactInfo: string;
+}
 export interface Product {
     id: bigint;
     stockQuantity: bigint;
@@ -69,6 +75,7 @@ export interface backendInterface {
     getPhoneNumber(token: string): Promise<string | null>;
     getProduct(id: bigint): Promise<Product>;
     getProductsByCategory(category: ProductCategory): Promise<Array<Product>>;
+    getSiteContent(): Promise<SiteContent>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     placeOrder(order: Order): Promise<bigint>;
@@ -77,5 +84,6 @@ export interface backendInterface {
     sendOtp(phone: string): Promise<string>;
     updateOrderStatus(id: bigint, status: OrderStatus): Promise<void>;
     updateProduct(id: bigint, product: Product): Promise<Product>;
+    updateSiteContent(content: SiteContent): Promise<void>;
     verifyOtp(phone: string, otp: string): Promise<string>;
 }

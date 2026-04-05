@@ -1,7 +1,34 @@
 import { Link } from "@tanstack/react-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
+
+const DEFAULT_ABOUT =
+  "Spreading the teachings of Lord Krishna through sacred books and devotional items.";
+const DEFAULT_CONTACT =
+  "Hare Krishna Hare Krishna\nKrishna Krishna Hare Hare\nHare Rama Hare Rama\nRama Rama Hare Hare";
 
 export function Footer() {
+  const [siteContent, setSiteContent] = useState<{
+    aboutSection?: string;
+    contactInfo?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const cached = localStorage.getItem("siteContent");
+    if (cached) {
+      try {
+        setSiteContent(JSON.parse(cached));
+      } catch {}
+    }
+  }, []);
+
+  const aboutText = siteContent?.aboutSection || DEFAULT_ABOUT;
+  const rawContact = siteContent?.contactInfo || DEFAULT_CONTACT;
+  // Build unique keys by combining position + content to avoid duplicate key warnings
+  const contactItems = rawContact
+    .split("\n")
+    .filter(Boolean)
+    .map((line, pos) => ({ line, id: `${pos}-${line}`, pos }));
+
   return (
     <footer className="bg-primary text-primary-foreground mt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -11,8 +38,7 @@ export function Footer() {
               About ISKCON
             </h3>
             <p className="text-sm text-primary-foreground/70 leading-relaxed">
-              Spreading the teachings of Lord Krishna through sacred books and
-              devotional items.
+              {aboutText}
             </p>
           </div>
           <div>
@@ -74,11 +100,14 @@ export function Footer() {
               Contact
             </h3>
             <ul className="space-y-2 text-sm text-primary-foreground/70">
-              <li>Hare Krishna Hare Krishna</li>
-              <li>Krishna Krishna Hare Hare</li>
-              <li className="mt-2 text-accent font-medium">
-                Hare Rama Hare Rama
-              </li>
+              {contactItems.map(({ line, id, pos }) => (
+                <li
+                  key={id}
+                  className={pos === 2 ? "mt-2 text-accent font-medium" : ""}
+                >
+                  {line}
+                </li>
+              ))}
             </ul>
           </div>
         </div>

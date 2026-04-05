@@ -7,6 +7,13 @@ import { Footer } from "../components/Footer";
 import { ProductCard } from "../components/ProductCard";
 import { useActor } from "../hooks/useActor";
 
+interface SiteContent {
+  homepageTitle: string;
+  bannerText: string;
+  aboutSection: string;
+  contactInfo: string;
+}
+
 const DECORATIVE_DOTS = [0, 1, 2, 3, 4, 5, 6, 7];
 const SKELETON_KEYS = [
   "sk-a",
@@ -19,10 +26,25 @@ const SKELETON_KEYS = [
   "sk-h",
 ];
 
+const DEFAULT_TITLE = "Divine Devotion Delivered";
+const DEFAULT_BANNER =
+  "Explore sacred ISKCON books and premium incense sticks. Bring the fragrance of devotion into your home.";
+
 export function HomePage() {
   const { actor } = useActor();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [siteContent, setSiteContent] = useState<SiteContent | null>(null);
+
+  // Load cached content from localStorage immediately (for instant updates after admin saves)
+  useEffect(() => {
+    const cached = localStorage.getItem("siteContent");
+    if (cached) {
+      try {
+        setSiteContent(JSON.parse(cached));
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     if (!actor) return;
@@ -33,7 +55,22 @@ export function HomePage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+    (actor as any)
+      .getSiteContent()
+      .then((c: SiteContent) => setSiteContent(c))
+      .catch(() => {});
   }, [actor]);
+
+  const heroTitle = siteContent?.homepageTitle || DEFAULT_TITLE;
+  const heroBanner = siteContent?.bannerText || DEFAULT_BANNER;
+
+  // Split title into up to 3 lines by spaces for styled display
+  const titleWords = heroTitle.trim().split(/\s+/);
+  const titleLine1 = titleWords[0] ?? "";
+  const titleLine2 = titleWords.slice(1, titleWords.length - 1).join(" ");
+  const titleLine3 = titleWords[titleWords.length - 1] ?? "";
+  const isSingleWord = titleWords.length === 1;
+  const isTwoWords = titleWords.length === 2;
 
   return (
     <div className="min-h-screen">
@@ -47,7 +84,7 @@ export function HomePage() {
         <div
           className="absolute inset-0 opacity-10"
           style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C8A45A' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23C8A45A' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
           }}
         />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
@@ -63,18 +100,37 @@ export function HomePage() {
                 className="font-display text-4xl md:text-5xl lg:text-6xl font-bold uppercase tracking-wide leading-tight mb-5"
                 style={{ color: "#F6F0E3" }}
               >
-                Divine
-                <br />
-                <span style={{ color: "#C8A45A" }}>Devotion</span>
-                <br />
-                Delivered
+                {isSingleWord ? (
+                  <span style={{ color: "#C8A45A" }}>{titleLine1}</span>
+                ) : isTwoWords ? (
+                  <>
+                    {titleLine1}
+                    <br />
+                    <span style={{ color: "#C8A45A" }}>{titleWords[1]}</span>
+                  </>
+                ) : (
+                  <>
+                    {titleLine1}
+                    {titleLine2 && (
+                      <>
+                        <br />
+                        <span style={{ color: "#C8A45A" }}>{titleLine2}</span>
+                      </>
+                    )}
+                    {titleLine3 && titleLine3 !== titleLine1 && (
+                      <>
+                        <br />
+                        {titleLine3}
+                      </>
+                    )}
+                  </>
+                )}
               </h1>
               <p
                 className="text-base md:text-lg mb-8 max-w-md"
                 style={{ color: "#F6F0E3", opacity: 0.75 }}
               >
-                Explore sacred ISKCON books and premium incense sticks. Bring
-                the fragrance of devotion into your home.
+                {heroBanner}
               </p>
               <Link
                 to="/products"
