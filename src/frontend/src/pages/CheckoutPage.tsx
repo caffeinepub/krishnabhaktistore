@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Principal } from "@dfinity/principal";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Loader2, MessageCircle } from "lucide-react";
 import type React from "react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,10 @@ import { OrderStatus } from "../backend";
 import { useCart } from "../context/CartContext";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import {
+  type WhatsAppOrderDetails,
+  openAdminWhatsAppNotification,
+} from "../utils/whatsapp";
 
 export function CheckoutPage() {
   const { actor } = useActor();
@@ -35,6 +39,18 @@ export function CheckoutPage() {
   ) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
+
+  const buildWhatsAppDetails = (): WhatsAppOrderDetails => ({
+    name: form.name,
+    phone: form.phone,
+    address: form.address,
+    products: items.map((i) => ({
+      name: i.name,
+      quantity: i.quantity,
+      price: (Number(i.priceCents * BigInt(i.quantity)) / 100).toFixed(2),
+    })),
+    total,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +81,10 @@ export function CheckoutPage() {
       };
 
       const orderId = await actor.placeOrder(order);
+
+      // Send WhatsApp notification to admin after successful order
+      openAdminWhatsAppNotification(buildWhatsAppDetails());
+
       clearCart();
       toast.success("Order placed successfully!");
       navigate({ to: `/order/${orderId.toString()}` });
@@ -74,6 +94,20 @@ export function CheckoutPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOrderOnWhatsApp = () => {
+    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
+      toast.error(
+        "Please fill in your Name, Phone, and Address before ordering on WhatsApp.",
+      );
+      return;
+    }
+    if (items.length === 0) {
+      toast.error("Your cart is empty.");
+      return;
+    }
+    openAdminWhatsAppNotification(buildWhatsAppDetails());
   };
 
   if (items.length === 0) {
@@ -110,6 +144,7 @@ export function CheckoutPage() {
               required
               placeholder="Your full name"
               className="mt-1"
+              data-ocid="checkout.name.input"
             />
           </div>
           <div>
@@ -123,6 +158,7 @@ export function CheckoutPage() {
               required
               placeholder="your@email.com"
               className="mt-1"
+              data-ocid="checkout.email.input"
             />
           </div>
           <div>
@@ -136,6 +172,7 @@ export function CheckoutPage() {
               required
               placeholder="+91 XXXXXXXXXX"
               className="mt-1"
+              data-ocid="checkout.phone.input"
             />
           </div>
           <div>
@@ -149,6 +186,7 @@ export function CheckoutPage() {
               placeholder="Full delivery address..."
               className="mt-1"
               rows={4}
+              data-ocid="checkout.address.textarea"
             />
           </div>
 
@@ -156,6 +194,7 @@ export function CheckoutPage() {
             type="submit"
             disabled={loading}
             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground uppercase tracking-wider text-sm"
+            data-ocid="checkout.place_order.submit_button"
           >
             {loading ? (
               <>
@@ -166,6 +205,24 @@ export function CheckoutPage() {
               "Place Order"
             )}
           </Button>
+
+          {/* Divider */}
+          <p className="text-xs text-center text-muted-foreground">— or —</p>
+
+          {/* Order on WhatsApp button */}
+          <Button
+            type="button"
+            onClick={handleOrderOnWhatsApp}
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold text-sm uppercase tracking-wider py-3 h-auto flex items-center justify-center gap-2"
+            data-ocid="checkout.whatsapp_order.button"
+          >
+            <MessageCircle className="h-5 w-5" />
+            Order on WhatsApp
+          </Button>
+
+          <p className="text-xs text-center text-muted-foreground">
+            Opens WhatsApp with your order details to send directly to us.
+          </p>
         </form>
 
         {/* Summary */}
