@@ -64,14 +64,18 @@ export interface _SERVICE {
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getOrder' : ActorMethod<[bigint], Order>,
+  'getPhoneNumber' : ActorMethod<[string], [] | [string]>,
   'getProduct' : ActorMethod<[bigint], Product>,
   'getProductsByCategory' : ActorMethod<[ProductCategory], Array<Product>>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'placeOrder' : ActorMethod<[Order], bigint>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'savePhoneNumber' : ActorMethod<[string, string], undefined>,
+  'sendOtp' : ActorMethod<[string], string>,
   'updateOrderStatus' : ActorMethod<[bigint, OrderStatus], undefined>,
   'updateProduct' : ActorMethod<[bigint, Product], Product>,
+  'verifyOtp' : ActorMethod<[string, string], string>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

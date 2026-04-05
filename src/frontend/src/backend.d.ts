@@ -66,12 +66,16 @@ export interface backendInterface {
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getOrder(id: bigint): Promise<Order>;
+    getPhoneNumber(token: string): Promise<string | null>;
     getProduct(id: bigint): Promise<Product>;
     getProductsByCategory(category: ProductCategory): Promise<Array<Product>>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
     isCallerAdmin(): Promise<boolean>;
     placeOrder(order: Order): Promise<bigint>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    savePhoneNumber(token: string, phone: string): Promise<void>;
+    sendOtp(phone: string): Promise<string>;
     updateOrderStatus(id: bigint, status: OrderStatus): Promise<void>;
     updateProduct(id: bigint, product: Product): Promise<Product>;
+    verifyOtp(phone: string, otp: string): Promise<string>;
 }

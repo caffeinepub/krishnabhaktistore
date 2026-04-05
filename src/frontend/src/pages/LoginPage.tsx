@@ -4,14 +4,16 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "@tanstack/react-router";
 import { Loader2, Phone, ShieldCheck } from "lucide-react";
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { toast } from "sonner";
+import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import { usePhoneUser } from "../hooks/usePhoneUser";
 
 export function LoginPage() {
   const { login, isLoggingIn } = useInternetIdentity();
   const { loginWithPhone } = usePhoneUser();
+  const { actor } = useActor();
   const navigate = useNavigate();
 
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -20,89 +22,72 @@ export function LoginPage() {
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  // Store OTP temporarily in a ref (not in state to avoid exposing in React DevTools)
-  const otpRef = useRef<string>("");
-  // Track OTP expiry
-  const otpExpiryRef = useRef<number>(0);
-  const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-  function generateOtp(): string {
-    return String(Math.floor(100000 + Math.random() * 900000));
-  }
-
-  function handleSendOtp() {
+  async function handleSendOtp() {
     const digits = phoneNumber.replace(/\D/g, "");
-    if (digits.length !== 10) {
+    if (digits.length < 10) {
       toast.error("Please enter a valid 10-digit phone number.");
       return;
     }
 
-    setIsSending(true);
-    const newOtp = generateOtp();
-
-    // Store OTP temporarily with expiry
-    otpRef.current = newOtp;
-    otpExpiryRef.current = Date.now() + OTP_TTL_MS;
-
-    // Show OTP in console for testing
-    console.log(
-      `[OTP Debug] Phone: ${digits} | OTP: ${newOtp} | Expires in: 5 minutes`,
-    );
-
-    setTimeout(() => {
-      setIsSending(false);
-      toast.success("OTP sent! Check your phone.", {
-        description: "Demo mode: OTP logged to browser console (F12 → Console)",
-        duration: 6000,
-      });
-      setStep("otp");
-    }, 800);
-  }
-
-  function handleVerifyOtp() {
-    // Check if OTP has expired
-    if (Date.now() > otpExpiryRef.current) {
-      toast.error("OTP has expired. Please request a new one.");
-      handleChangeNumber();
+    if (!actor) {
+      toast.error("Connection error. Please refresh and try again.");
       return;
     }
 
-    if (otp.trim() !== otpRef.current) {
-      toast.error("Invalid OTP. Please try again.");
+    setIsSending(true);
+    try {
+      await actor.sendOtp(digits);
+      toast.success("OTP sent to your phone!", {
+        description: "Enter the 6-digit code you received via SMS.",
+        duration: 5000,
+      });
+      setStep("otp");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to send OTP.";
+      toast.error(message);
+    } finally {
+      setIsSending(false);
+    }
+  }
+
+  async function handleVerifyOtp() {
+    const digits = phoneNumber.replace(/\D/g, "");
+
+    if (!actor) {
+      toast.error("Connection error. Please refresh and try again.");
       return;
     }
 
     setIsVerifying(true);
-
-    // Clear OTP from temporary storage after successful verification
-    otpRef.current = "";
-    otpExpiryRef.current = 0;
-    console.log(
-      "[OTP Debug] OTP verified successfully. Temporary OTP cleared.",
-    );
-
-    setTimeout(() => {
-      setIsVerifying(false);
+    try {
+      await actor.verifyOtp(digits, otp.trim());
 
       // Generate session token and log user in
-      // Phone + token are persisted to localStorage for auto-login on next visit
       const token = crypto.randomUUID();
-      const cleanPhone = phoneNumber.replace(/\D/g, "");
-      loginWithPhone(cleanPhone, token);
+      loginWithPhone(digits, token);
 
       toast.success("Welcome to KrishnaBhaktiStore!", {
-        description: `Logged in as ${phoneNumber}`,
+        description: `Logged in as +91 ${digits}`,
         duration: 4000,
       });
       navigate({ to: "/" });
-    }, 600);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "OTP verification failed.";
+      // Extract the meaningful error from ICP trap messages
+      const cleanMessage = message.includes("Canister trapped")
+        ? (message.split("trapped: ")[1]?.split("\n")[0] ?? message)
+        : message;
+      toast.error(cleanMessage);
+    } finally {
+      setIsVerifying(false);
+    }
   }
 
   function handleChangeNumber() {
     setStep("phone");
     setOtp("");
-    otpRef.current = "";
-    otpExpiryRef.current = 0;
   }
 
   function handleResendOtp() {
@@ -174,7 +159,7 @@ export function LoginPage() {
                   <Button
                     data-ocid="phone.primary_button"
                     onClick={handleSendOtp}
-                    disabled={isSending}
+                    disabled={isSending || !actor}
                     className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
                   >
                     {isSending ? (
@@ -199,7 +184,7 @@ export function LoginPage() {
                       {phoneNumber}
                     </p>
                     <p className="text-xs text-amber-600">
-                      OTP expires in 5 minutes
+                      OTP expires in 2 minutes
                     </p>
                   </div>
 
@@ -227,7 +212,7 @@ export function LoginPage() {
                   <Button
                     data-ocid="otp.primary_button"
                     onClick={handleVerifyOtp}
-                    disabled={isVerifying || otp.length < 6}
+                    disabled={isVerifying || otp.length < 6 || !actor}
                     className="w-full h-12 text-base font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
                   >
                     {isVerifying ? (

@@ -3,6 +3,7 @@ import Array "mo:core/Array";
 import Time "mo:core/Time";
 import Principal "mo:core/Principal";
 import Nat "mo:core/Nat";
+import Int "mo:core/Int";
 import Order "mo:core/Order";
 import Text "mo:core/Text";
 import List "mo:core/List";
@@ -10,6 +11,7 @@ import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
+import HttpOutcall "http-outcalls/outcall";
 
 actor {
   type ProductCategory = {
@@ -72,14 +74,28 @@ actor {
     address : Text;
   };
 
+  // OTP record
+  type OtpRecord = {
+    otp : Text;
+    expiresAt : Time.Time;
+  };
+
   var nextProductId = 1;
   var nextOrderId = 1;
 
   let products = Map.empty<Nat, Product>();
   let orders = Map.empty<Nat, Order>();
   let userProfiles = Map.empty<Principal, UserProfile>();
-  // Phone number registry: token -> phone number (token is a client-generated UUID)
+  // Phone number registry: token -> phone number
   let phoneRegistry = Map.empty<Text, Text>();
+  // OTP storage: phone -> OtpRecord
+  let otpStore = Map.empty<Text, OtpRecord>();
+
+  // Fast2SMS API key
+  let fast2smsApiKey = "O0MGa7ghKmN5AL4wvUyln3EzTs6pFWeC89jR1qVuo2tQIDJdSrALoqzYEH6wtm1XlQTBM4aS82fCRPUI";
+
+  // OTP TTL: 2 minutes in nanoseconds
+  let OTP_TTL_NS : Int = 2 * 60 * 1_000_000_000;
 
   // Authorization module instantiation
   let accessControlState = AccessControl.initState();
@@ -89,6 +105,73 @@ actor {
   let ownerPrincipal = Principal.fromText("6yb43-vmf7k-bflbc-pu74g-uhytl-4ha37-gz7m3-imf7y-ovax2-7r4rr-eae");
   accessControlState.userRoles.add(ownerPrincipal, #admin);
   accessControlState.adminAssigned := true;
+
+  // Transform function for HTTP outcalls
+  public query func transform(input : HttpOutcall.TransformationInput) : async HttpOutcall.TransformationOutput {
+    HttpOutcall.transform(input);
+  };
+
+  // Generate a 6-digit OTP from time-based entropy
+  // Returns a 6-character text like "123456"
+  func generateOtp() : Text {
+    let t : Int = Time.now();
+    let n : Nat = Int.abs(t % 900000) + 100000;
+    n.toText();
+  };
+
+  // URL-encode spaces for the SMS message
+  func urlEncodeMessage(msg : Text) : Text {
+    msg.replace(#char ' ', "%20");
+  };
+
+  // Send OTP via Fast2SMS
+  public shared func sendOtp(phone : Text) : async Text {
+    if (phone.size() < 7 or phone.size() > 15) {
+      Runtime.trap("Invalid phone number");
+    };
+
+    let otp = generateOtp();
+    let expiresAt = Time.now() + OTP_TTL_NS;
+
+    // Store OTP
+    otpStore.add(phone, { otp; expiresAt });
+
+    // Build Fast2SMS GET URL
+    let message = "Your KrishnaBhaktiStore OTP is " # otp # ". Valid for 2 minutes. Do not share.";
+    let encodedMsg = urlEncodeMessage(message);
+    let url = "https://www.fast2sms.com/dev/bulkV2?authorization=" # fast2smsApiKey
+      # "&route=q&message=" # encodedMsg
+      # "&language=english&flash=0&numbers=" # phone;
+
+    let _response = await HttpOutcall.httpGetRequest(
+      url,
+      [{ name = "cache-control"; value = "no-cache" }],
+      transform,
+    );
+
+    "OTP sent successfully"
+  };
+
+  // Verify OTP
+  public shared func verifyOtp(phone : Text, otp : Text) : async Text {
+    switch (otpStore.get(phone)) {
+      case (null) {
+        Runtime.trap("No OTP found. Please request a new OTP.");
+      };
+      case (?record) {
+        if (Time.now() > record.expiresAt) {
+          otpStore.remove(phone);
+          Runtime.trap("OTP has expired. Please request a new one.");
+        };
+        if (otp != record.otp) {
+          Runtime.trap("Invalid OTP. Please try again.");
+        };
+        // Clear OTP on successful verification
+        otpStore.remove(phone);
+        "OTP verified successfully"
+      };
+    };
+  };
 
   // Sample Products
   let sampleProducts : [Product] = [
@@ -204,7 +287,6 @@ actor {
   nextProductId := 11;
 
   // Phone Number Registry - open to all callers (no auth required)
-  // Stores phone number with a client-generated token so user can retrieve it on next visit
   public shared func savePhoneNumber(token : Text, phone : Text) : async () {
     if (token.size() < 8) {
       Runtime.trap("Token must be at least 8 characters");
@@ -306,7 +388,6 @@ actor {
 
   // Place Order - Public access (anyone can place an order)
   public shared ({ caller }) func placeOrder(order : Order) : async Nat {
-    // Validate products and stock
     let validatedItems = List.empty<OrderItem>();
     var totalAmount = 0;
     for (item in order.items.values()) {
@@ -334,7 +415,6 @@ actor {
       };
     };
 
-    // Create order with caller as customerId
     let newOrder : Order = {
       order with
       id = nextOrderId;
@@ -346,7 +426,6 @@ actor {
     };
     orders.add(nextOrderId, newOrder);
 
-    // Update stock quantities
     for (item in validatedItems.toArray().values()) {
       switch (products.get(item.productId)) {
         case (null) { Runtime.trap("Product does not exist") };
@@ -372,12 +451,11 @@ actor {
     orders.values().toArray().sort();
   };
 
-  // Get Order by ID - Customer can view their own order, Admin can view any order
+  // Get Order by ID
   public query ({ caller }) func getOrder(id : Nat) : async Order {
     switch (orders.get(id)) {
       case (null) { Runtime.trap("Order does not exist") };
       case (?order) {
-        // Allow if caller is the customer who placed the order OR caller is admin
         if (caller != order.customerId and not AccessControl.isAdmin(accessControlState, caller)) {
           Runtime.trap("Unauthorized: Can only view your own orders");
         };

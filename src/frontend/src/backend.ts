@@ -157,6 +157,10 @@ export interface backendInterface {
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
     updateOrderStatus(id: bigint, status: OrderStatus): Promise<void>;
     updateProduct(id: bigint, product: Product): Promise<Product>;
+    getPhoneNumber(token: string): Promise<string | null>;
+    savePhoneNumber(token: string, phone: string): Promise<void>;
+    sendOtp(phone: string): Promise<string>;
+    verifyOtp(phone: string, otp: string): Promise<string>;
 }
 import type { Order as _Order, OrderItem as _OrderItem, OrderStatus as _OrderStatus, Product as _Product, ProductCategory as _ProductCategory, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
@@ -398,6 +402,21 @@ export class Backend implements backendInterface {
             const result = await this.actor.updateProduct(arg0, to_candid_Product_n1(this._uploadFile, this._downloadFile, arg1));
             return from_candid_Product_n5(this._uploadFile, this._downloadFile, result);
         }
+    }
+    async getPhoneNumber(arg0: string): Promise<string | null> {
+        const result = await this.actor.getPhoneNumber(arg0);
+        return result.length === 0 ? null : result[0];
+    }
+    async savePhoneNumber(arg0: string, arg1: string): Promise<void> {
+        await this.actor.savePhoneNumber(arg0, arg1);
+    }
+    async sendOtp(arg0: string): Promise<string> {
+        const result = await this.actor.sendOtp(arg0);
+        return result;
+    }
+    async verifyOtp(arg0: string, arg1: string): Promise<string> {
+        const result = await this.actor.verifyOtp(arg0, arg1);
+        return result;
     }
 }
 function from_candid_OrderStatus_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _OrderStatus): OrderStatus {

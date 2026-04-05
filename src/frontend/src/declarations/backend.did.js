@@ -69,6 +69,7 @@ export const idlService = IDL.Service({
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getOrder' : IDL.Func([IDL.Nat], [Order], ['query']),
+  'getPhoneNumber' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
   'getProduct' : IDL.Func([IDL.Nat], [Product], ['query']),
   'getProductsByCategory' : IDL.Func(
       [ProductCategory],
@@ -83,8 +84,11 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'placeOrder' : IDL.Func([Order], [IDL.Nat], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'savePhoneNumber' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'sendOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
   'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
   'updateProduct' : IDL.Func([IDL.Nat, Product], [Product], []),
+  'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
 });
 
 export const idlInitArgs = [];
@@ -151,6 +155,7 @@ export const idlFactory = ({ IDL }) => {
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getOrder' : IDL.Func([IDL.Nat], [Order], ['query']),
+    'getPhoneNumber' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Text)], ['query']),
     'getProduct' : IDL.Func([IDL.Nat], [Product], ['query']),
     'getProductsByCategory' : IDL.Func(
         [ProductCategory],
@@ -165,8 +170,11 @@ export const idlFactory = ({ IDL }) => {
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'placeOrder' : IDL.Func([Order], [IDL.Nat], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'savePhoneNumber' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'sendOtp' : IDL.Func([IDL.Text], [IDL.Text], []),
     'updateOrderStatus' : IDL.Func([IDL.Nat, OrderStatus], [], []),
     'updateProduct' : IDL.Func([IDL.Nat, Product], [Product], []),
+    'verifyOtp' : IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
   });
 };
 
