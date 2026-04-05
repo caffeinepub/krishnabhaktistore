@@ -35,7 +35,7 @@ import type { Order, Product } from "../backend";
 import { OrderStatus, ProductCategory } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
-import { uploadImageFile } from "../utils/imageUpload";
+import { uploadImageFile, validateImageFile } from "../utils/imageUpload";
 
 interface ProductFormData {
   name: string;
@@ -144,6 +144,16 @@ export function AdminPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate type and size before accepting
+    try {
+      validateImageFile(file);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid image file");
+      // Reset the input so the same file can be re-selected after fix
+      if (imageInputRef.current) imageInputRef.current.value = "";
+      return;
+    }
+
     // Revoke previous blob URL if any
     if (imagePreview?.startsWith("blob:")) {
       URL.revokeObjectURL(imagePreview);
@@ -181,7 +191,13 @@ export function AdminPage() {
       if (imageFile) {
         setUploading(true);
         try {
-          finalImageUrl = await uploadImageFile(imageFile, (pct) => {
+          if (!identity) {
+            toast.error("Please log in before uploading an image.");
+            setSaving(false);
+            setUploading(false);
+            return;
+          }
+          finalImageUrl = await uploadImageFile(imageFile, identity, (pct) => {
             setUploadProgress(pct);
           });
         } catch (uploadErr) {
@@ -589,7 +605,7 @@ export function AdminPage() {
               <input
                 ref={imageInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
                 className="hidden"
                 onChange={handleImageFileChange}
               />
