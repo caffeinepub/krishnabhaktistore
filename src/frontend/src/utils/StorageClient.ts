@@ -481,42 +481,125 @@ export class StorageClient {
     this.storageGatewayClient = new StorageGatewayClient(storageGatewayUrl);
   }
 
+  /**
+   * Request a certificate from the backend canister for the given blob hash.
+   *
+   * The canister call may return either a v3 response (certificate field present)
+   * or a v2 response (reply field present). We handle both formats gracefully so
+   * that a non-v3 response never causes a hard crash.
+   */
   private async getCertificate(hash: string): Promise<Uint8Array> {
+    console.log("[StorageClient] Requesting certificate for hash:", hash);
     const args = IDL.encode([IDL.Text], [hash]);
-    const result = await this.agent.call(this.backendCanisterId, {
-      methodName: "_caffeineStorageCreateCertificate",
-      arg: args,
-    });
-    const respone = result.response.body;
-    if (isV3ResponseBody(respone)) {
-      console.log("Certificate:", respone.certificate);
-      return respone.certificate;
+
+    let result: Awaited<ReturnType<typeof this.agent.call>>;
+    try {
+      result = await this.agent.call(this.backendCanisterId, {
+        methodName: "_caffeineStorageCreateCertificate",
+        arg: args,
+      });
+    } catch (err) {
+      console.error("[StorageClient] agent.call failed:", err);
+      throw err;
     }
-    throw new Error("Expected v3 response body");
+
+    const responseBody = result?.response?.body;
+    console.log("[StorageClient] Raw response body type:", typeof responseBody);
+    console.log(
+      "[StorageClient] isV3ResponseBody:",
+      responseBody != null ? isV3ResponseBody(responseBody) : false,
+    );
+
+    // --- Handle v3 response (preferred path) ---
+    if (responseBody != null && isV3ResponseBody(responseBody)) {
+      const cert = responseBody.certificate;
+      console.log(
+        "[StorageClient] Got v3 certificate, length:",
+        cert?.length ?? 0,
+      );
+      return cert;
+    }
+
+    // --- Handle v2/legacy reply response ---
+    // In v2 the certificate is embedded inside the reply bytes. We extract it
+    // by decoding the Candid reply payload.
+    if (responseBody != null && "reply" in responseBody) {
+      const replyBody = responseBody as { reply?: { arg?: Uint8Array } };
+      if (replyBody.reply?.arg) {
+        try {
+          const decoded = IDL.decode(
+            [IDL.Vec(IDL.Nat8)],
+            replyBody.reply.arg,
+          ) as [number[]];
+          const certBytes = new Uint8Array(decoded[0]);
+          console.log(
+            "[StorageClient] Extracted certificate from v2 reply, length:",
+            certBytes.length,
+          );
+          return certBytes;
+        } catch (decodeErr) {
+          console.error(
+            "[StorageClient] Failed to decode v2 reply body:",
+            decodeErr,
+          );
+          throw new Error(
+            `Failed to decode certificate from server response: ${decodeErr}`,
+          );
+        }
+      }
+    }
+
+    // --- Unknown/unexpected response format ---
+    console.error(
+      "[StorageClient] Unexpected response body structure:",
+      JSON.stringify(responseBody),
+    );
+    throw new Error(
+      "Unexpected server response when requesting upload certificate. " +
+        "Please check your Internet Identity session and try again.",
+    );
   }
 
+  /**
+   * Upload bytes to blob storage.
+   *
+   * @param blobBytes   Raw file bytes to upload
+   * @param contentType MIME type of the file (e.g. "image/webp"). Stored as
+   *                    a Content-Type header in the blob tree so the gateway
+   *                    serves the file with the correct type.
+   * @param onProgress  Optional progress callback (0-100)
+   */
   public async putFile(
     blobBytes: Uint8Array,
+    contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
-    // HTTP headers for fetch requests (used for the PUT request to gateway)
+    const mimeType = contentType ?? "application/octet-stream";
+
+    // HTTP headers for chunk fetch requests
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes
-    const file = new Blob([new Uint8Array(blobBytes)], {
-      type: "application/octet-stream",
-    });
-    // File metadata headers that will be stored with the blob tree
+
+    // File metadata headers stored with the blob tree
+    // These are served back by the gateway as HTTP response headers
     const fileHeaders: Headers = {
-      "Content-Type": "application/octet-stream",
-      "Content-Length": file.size.toString(),
+      "Content-Type": mimeType,
     };
+
+    const file = new Blob([new Uint8Array(blobBytes)], { type: mimeType });
+    fileHeaders["Content-Length"] = file.size.toString();
+
+    console.log(
+      `[StorageClient] putFile: ${file.size} bytes, content-type: ${mimeType}`,
+    );
 
     const { chunks, chunkHashes, blobHashTree } =
       await this.processFileForUpload(file, fileHeaders);
     const blobRootHash = blobHashTree.tree.hash;
     const hashString = blobRootHash.toShaString();
+
+    console.log("[StorageClient] Computed blob root hash:", hashString);
 
     const certificateBytes = await this.getCertificate(hashString);
 
@@ -535,6 +618,7 @@ export class StorageClient {
       httpHeaders,
       onProgress,
     );
+    console.log("[StorageClient] Upload complete, hash:", hashString);
     return { hash: hashString };
   }
 

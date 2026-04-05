@@ -86,8 +86,8 @@ async function compressImage(file: File): Promise<Blob> {
  * Flow:
  *   1. Validate format + size
  *   2. Compress to WebP via canvas
- *   3. Create StorageClient instance with `new` (it is a class, NOT a function)
- *   4. Call storageClient.putFile(bytes, onProgress?) — exactly two args
+ *   3. Create StorageClient instance with `new`
+ *   4. Call storageClient.putFile(bytes, contentType, onProgress?)
  *   5. Return the direct URL via storageClient.getDirectURL(hash)
  *
  * @param file       The image File to upload
@@ -142,12 +142,14 @@ export async function uploadImageFile(
     agent, // HttpAgent
   );
 
-  // Step 7 — upload: putFile(bytes, onProgress?) — two arguments only
+  // Step 7 — upload: putFile(bytes, contentType, onProgress?)
+  // Pass OUTPUT_MIME as the contentType so the blob is stored with "image/webp"
   console.log("[ImageUpload] Calling storageClient.putFile()...");
   let hash: string;
   try {
     const result = await storageClient.putFile(
       compressedBytes,
+      OUTPUT_MIME,
       onProgress ?? undefined,
     );
     hash = result.hash;
