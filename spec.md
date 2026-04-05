@@ -1,32 +1,30 @@
 # KrishnaBhaktiStore
 
 ## Current State
-The LoginPage (`src/frontend/src/pages/LoginPage.tsx`) shows a single "Login with Internet Identity" button. There is no phone-based login option. Authentication is handled entirely via Internet Identity through `useInternetIdentity` hook.
+- Phone login with OTP is implemented on /login page
+- On successful OTP verification, loginWithPhone(phone) saves the phone to localStorage under key phoneUser
+- usePhoneUser hook reads from localStorage on mount -- so auto-login already works on page refresh
+- Header.tsx shows phone number + logout button for phone users, but only on sm: (desktop) breakpoints -- invisible on mobile
+- Backend has saveCallerUserProfile / getCallerUserProfile but these require an authenticated Principal (Internet Identity), not usable for phone-only users
+- No backend storage of phone numbers for phone-only users (only localStorage)
 
 ## Requested Changes (Diff)
 
 ### Add
-- Phone number input field with country code prefix (+91 default for India)
-- "Send OTP" button that generates a 6-digit OTP and shows it in a toast (demo mode -- no real SMS gateway)
-- After Send OTP is clicked, reveal a 6-digit OTP input field
-- "Verify OTP" button that checks the entered code
-- On successful verification, store a phone-login session in localStorage and update app auth state
-- Clean, mobile-friendly UI with clear section separation between Phone Login and Internet Identity Login
+- Backend: new savePhoneUser(phone: Text) that stores phone number mapped to a unique token (anonymous callers). Keyed by a client-generated UUID token stored in localStorage.
+- Frontend: after OTP verification, call savePhoneUser(phone) on the backend and store the returned token in localStorage alongside phone
+- Frontend: on app load, if localStorage has phoneUser, treat as auto-logged-in (already works)
 
 ### Modify
-- LoginPage.tsx: Add phone OTP login section above the existing Internet Identity button
-- The page should offer both options: phone OTP (primary, for regular customers) and Internet Identity (secondary, for admin)
+- Header.tsx: Remove hidden sm: from the phone user block so logout button and phone number are visible on mobile
+- Header.tsx: Also make II logout button visible on mobile
+- LoginPage.tsx: After OTP verification, call savePhoneUser backend API to persist phone to database, then loginWithPhone
 
 ### Remove
 - Nothing removed
 
 ## Implementation Plan
-1. Update `LoginPage.tsx` to include:
-   - Tab or section split: "Phone Login" | "Admin Login (Internet Identity)"
-   - Phone number input with +91 prefix
-   - "Send OTP" button -- generates random 6-digit OTP, stores it in component state, shows it via toast (`Your OTP is: XXXXXX`)
-   - OTP input field (6 digits) shown after Send OTP clicked
-   - "Verify OTP" button -- compares entered vs stored OTP, shows success/error toast
-   - On success: save phone number to localStorage as `phoneUser`, navigate to home or trigger state update
-2. Keep existing Internet Identity login button in the Admin Login tab/section
-3. No backend changes needed -- phone login is frontend-only (demo)
+1. Add savePhoneUser(phone: Text, token: Text) : async () and getPhoneUser(token: Text) : async ?Text to backend main.mo
+2. Update Header.tsx to show phone user info and logout on all screen sizes (remove hidden sm: for phone user section)
+3. Update LoginPage.tsx to call backend savePhoneUser after successful OTP verification
+4. Update usePhoneUser.ts to store/read a session token alongside phone in localStorage

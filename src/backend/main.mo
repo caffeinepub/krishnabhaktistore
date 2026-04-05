@@ -78,6 +78,8 @@ actor {
   let products = Map.empty<Nat, Product>();
   let orders = Map.empty<Nat, Order>();
   let userProfiles = Map.empty<Principal, UserProfile>();
+  // Phone number registry: token -> phone number (token is a client-generated UUID)
+  let phoneRegistry = Map.empty<Text, Text>();
 
   // Authorization module instantiation
   let accessControlState = AccessControl.initState();
@@ -200,6 +202,22 @@ actor {
   };
 
   nextProductId := 11;
+
+  // Phone Number Registry - open to all callers (no auth required)
+  // Stores phone number with a client-generated token so user can retrieve it on next visit
+  public shared func savePhoneNumber(token : Text, phone : Text) : async () {
+    if (token.size() < 8) {
+      Runtime.trap("Token must be at least 8 characters");
+    };
+    if (phone.size() < 7) {
+      Runtime.trap("Phone number too short");
+    };
+    phoneRegistry.add(token, phone);
+  };
+
+  public query func getPhoneNumber(token : Text) : async ?Text {
+    phoneRegistry.get(token);
+  };
 
   // User Profile Functions
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {

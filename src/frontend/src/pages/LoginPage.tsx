@@ -83,8 +83,13 @@ export function LoginPage() {
 
     setTimeout(() => {
       setIsVerifying(false);
-      // Log user in: save phone number as user ID and notify all listeners
-      loginWithPhone(phoneNumber.replace(/\D/g, ""));
+
+      // Generate session token and log user in
+      // Phone + token are persisted to localStorage for auto-login on next visit
+      const token = crypto.randomUUID();
+      const cleanPhone = phoneNumber.replace(/\D/g, "");
+      loginWithPhone(cleanPhone, token);
+
       toast.success("Welcome to KrishnaBhaktiStore!", {
         description: `Logged in as ${phoneNumber}`,
         duration: 4000,

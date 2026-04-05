@@ -7,7 +7,7 @@ import { usePhoneUser } from "../hooks/usePhoneUser";
 
 export function Header() {
   const { itemCount } = useCart();
-  const { identity, login, clear } = useInternetIdentity();
+  const { identity, clear } = useInternetIdentity();
   const { phoneUser, logoutPhone } = usePhoneUser();
   const location = useLocation();
   const isIILoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
@@ -96,8 +96,9 @@ export function Header() {
                 </Link>
                 <button
                   type="button"
+                  data-ocid="header.logout_button"
                   onClick={clear}
-                  className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <User className="h-3.5 w-3.5" />
                   Logout
@@ -107,15 +108,16 @@ export function Header() {
 
             {/* Phone user logged-in state */}
             {!isIILoggedIn && phoneUser && (
-              <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 bg-muted rounded px-2 py-1">
                   <Phone className="h-3 w-3 text-primary flex-shrink-0" />
-                  <span className="text-[11px] font-medium text-foreground">
+                  <span className="text-[11px] font-medium text-foreground max-w-[80px] truncate">
                     {phoneUser.phone}
                   </span>
                 </div>
                 <button
                   type="button"
+                  data-ocid="header.logout_button"
                   onClick={logoutPhone}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
                 >
@@ -127,14 +129,14 @@ export function Header() {
 
             {/* Not logged in */}
             {!isIILoggedIn && !phoneUser && (
-              <button
-                type="button"
-                onClick={login}
-                className="hidden sm:flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
+              <Link
+                to="/login"
+                data-ocid="header.link"
+                className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors"
               >
                 <User className="h-3.5 w-3.5" />
                 Login
-              </button>
+              </Link>
             )}
 
             <Link
