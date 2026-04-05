@@ -151,7 +151,6 @@ export async function uploadImageFile(
     config.backend_canister_id,
     config.project_id,
     agent,
-    OUTPUT_MIME, // pass content type here for proper Blob construction
   );
 
   console.log("[ImageUpload] StorageClient created. Calling putFile...");

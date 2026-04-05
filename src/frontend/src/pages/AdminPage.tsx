@@ -375,12 +375,14 @@ export function AdminPage() {
         } catch (uploadErr) {
           console.error("[AdminPage] Image upload error:", uploadErr);
           toast.error(
-            "Image upload failed, try smaller file or paste image URL below",
+            "Image upload failed. Saving product without image — paste a URL below if needed.",
           );
+          // Decouple: clear the failed file so the button stays enabled,
+          // then fall through and save the product with formData.imageUrl (fallback URL or empty).
           setUploadFailed(true);
-          setSaving(false);
-          setUploading(false);
-          return;
+          setImageFile(null);
+          // finalImageUrl already equals formData.imageUrl (set at top of handleSave),
+          // so the product will be saved without the failed upload.
         } finally {
           setUploading(false);
         }
