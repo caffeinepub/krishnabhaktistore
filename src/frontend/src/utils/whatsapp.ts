@@ -1,7 +1,7 @@
 // Admin WhatsApp number in international format (no + sign)
 // ⚠️ UPDATE THIS to your real WhatsApp number before going live!
 // Example: "919876543210" for +91 98765 43210
-export const ADMIN_WHATSAPP_NUMBER = "919999999999"; // <-- UPDATE THIS
+export const ADMIN_WHATSAPP_NUMBER = "918391020810"; // <-- UPDATE THIS
 
 export interface WhatsAppOrderDetails {
   name: string;
