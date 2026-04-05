@@ -88,7 +88,7 @@ function extractAgentErrorMessage(error: string): string {
 
 function processError(e: unknown): never {
   if (e && typeof e === "object" && "message" in e) {
-    throw new Error(extractAgentErrorMessage(`${(e as {message: unknown}).message}`));
+    throw new Error(extractAgentErrorMessage(`${e.message}`));
   }
   throw e;
 }
@@ -156,7 +156,6 @@ export async function createActorWithConfig(
   const MOTOKO_DEDUPLICATION_SENTINEL = "!caf!";
 
   const uploadFile = async (file: ExternalBlob): Promise<Uint8Array> => {
-    // Use default content-type for generic blob uploads
     const { hash } = await storageClient.putFile(
       await file.getBytes(),
       undefined,
