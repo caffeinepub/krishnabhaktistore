@@ -4,13 +4,12 @@ import { StorageClient } from "./StorageClient";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-const COMPRESS_MAX_DIMENSION = 1600; // max width/height after compression
-const COMPRESS_QUALITY = 0.82; // WebP quality
-const OUTPUT_MIME = "image/webp"; // compressed output format
+const COMPRESS_MAX_DIMENSION = 1600;
+const COMPRESS_QUALITY = 0.82;
+const OUTPUT_MIME = "image/webp";
 
 /**
  * Validates an image file for type and size constraints.
- * Throws an error with a user-friendly message if validation fails.
  */
 export function validateImageFile(file: File): void {
   if (!ALLOWED_TYPES.includes(file.type)) {
@@ -26,7 +25,6 @@ export function validateImageFile(file: File): void {
 /**
  * Compresses an image file using a canvas element.
  * Resizes to max dimension and converts to WebP.
- * Returns a Blob of the compressed image.
  */
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
@@ -38,7 +36,6 @@ async function compressImage(file: File): Promise<Blob> {
 
       let { width, height } = img;
 
-      // Resize if either dimension exceeds the max
       if (width > COMPRESS_MAX_DIMENSION || height > COMPRESS_MAX_DIMENSION) {
         if (width >= height) {
           height = Math.round((height * COMPRESS_MAX_DIMENSION) / width);
@@ -85,7 +82,10 @@ async function compressImage(file: File): Promise<Blob> {
 
 /**
  * Uploads an image file to blob storage and returns a direct URL.
- * Validates format/size, compresses the image, then uploads with correct Content-Type.
+ * Validates format/size, compresses the image, then uploads via StorageClient.
+ *
+ * IMPORTANT: putFile(bytes, onProgress?) — contentType is set inside StorageClient
+ * via the Blob constructor. We do NOT pass OUTPUT_MIME as a separate argument.
  *
  * @param file - The image File to upload
  * @param identity - Authenticated Internet Identity (required for upload permissions)
@@ -100,17 +100,32 @@ export async function uploadImageFile(
   // Validate before uploading
   validateImageFile(file);
 
-  // Compress the image to reduce size and normalise format
+  console.log(
+    "[ImageUpload] Starting upload for:",
+    file.name,
+    "(",
+    file.type,
+    ")",
+  );
+
+  // Compress the image
   console.log("[ImageUpload] Compressing image...");
   const compressedBlob = await compressImage(file);
   const compressedBytes = new Uint8Array(await compressedBlob.arrayBuffer());
   console.log(
-    `[ImageUpload] Compressed size: ${(compressedBytes.byteLength / 1024).toFixed(1)} KB, MIME: ${OUTPUT_MIME}`,
+    `[ImageUpload] Compressed: ${(compressedBytes.byteLength / 1024).toFixed(1)} KB, MIME: ${OUTPUT_MIME}`,
   );
 
   const config = await loadConfig();
+  console.log("[ImageUpload] Config loaded:", {
+    backend_host: config.backend_host,
+    backend_canister_id: config.backend_canister_id,
+    project_id: config.project_id,
+    storage_gateway_url: config.storage_gateway_url,
+    bucket_name: config.bucket_name,
+  });
 
-  // Check that we have a real (non-anonymous) identity before attempting upload
+  // Block anonymous identities
   if (identity.getPrincipal().isAnonymous()) {
     const err = new Error(
       "You must be logged in as admin to upload images. Please authenticate with Internet Identity first.",
@@ -119,7 +134,8 @@ export async function uploadImageFile(
     throw err;
   }
 
-  // Use the authenticated identity so the backend canister accepts the certificate request
+  console.log("[ImageUpload] Principal:", identity.getPrincipal().toText());
+
   const agent = new HttpAgent({
     host: config.backend_host,
     identity,
@@ -135,25 +151,27 @@ export async function uploadImageFile(
     config.backend_canister_id,
     config.project_id,
     agent,
+    OUTPUT_MIME, // pass content type here for proper Blob construction
   );
 
-  console.log(
-    "[ImageUpload] Uploading to storage with Content-Type:",
-    OUTPUT_MIME,
-  );
+  console.log("[ImageUpload] StorageClient created. Calling putFile...");
 
   try {
-    // Pass OUTPUT_MIME as the contentType (2nd param) and onProgress as the 3rd param
+    // CORRECT CALL: putFile(bytes, onProgress?) — two args only
     const { hash } = await storageClient.putFile(
       compressedBytes,
-      OUTPUT_MIME,
       onProgress ?? undefined,
     );
     const url = await storageClient.getDirectURL(hash);
     console.log("[ImageUpload] Upload successful. URL:", url);
     return url;
-  } catch (err) {
-    console.error("[ImageUpload] Upload failed:", err);
+  } catch (err: unknown) {
+    // Log the full raw error so we can see exactly what the server returned
+    console.error("[ImageUpload] Upload FAILED. Raw error object:", err);
+    if (err instanceof Error) {
+      console.error("[ImageUpload] Error message:", err.message);
+      console.error("[ImageUpload] Error stack:", err.stack);
+    }
     throw err;
   }
 }
