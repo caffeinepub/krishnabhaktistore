@@ -495,21 +495,30 @@ export class StorageClient {
     throw new Error("Expected v3 response body");
   }
 
+  /**
+   * Uploads bytes to blob storage.
+   *
+   * @param blobBytes - Raw bytes to upload
+   * @param contentType - MIME type (e.g. "image/webp", "image/jpeg"). Defaults to "application/octet-stream".
+   * @param onProgress - Optional progress callback (0-100)
+   */
   public async putFile(
     blobBytes: Uint8Array,
     contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
     const mimeType = contentType || "application/octet-stream";
+
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes
-    const file = new Blob([new Uint8Array(blobBytes)], {
-      type: mimeType,
-    });
+
+    // Create a Blob with the correct MIME type so it is served correctly by the gateway
+    const file = new Blob([new Uint8Array(blobBytes)], { type: mimeType });
+
     // File metadata headers that will be stored with the blob tree
+    // These are what the storage gateway uses when serving the file back to browsers
     const fileHeaders: Headers = {
       "Content-Type": mimeType,
       "Content-Length": file.size.toString(),

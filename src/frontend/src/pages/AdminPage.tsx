@@ -230,6 +230,7 @@ export function AdminPage() {
   const [imagePreview, setImagePreview] = useState<string>("");
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
+  const [uploadFailed, setUploadFailed] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Track original image URL for edit mode revert
@@ -254,6 +255,7 @@ export function AdminPage() {
     setImagePreview("");
     setUploadProgress(0);
     setUploading(false);
+    setUploadFailed(false);
   };
 
   useEffect(() => {
@@ -371,11 +373,11 @@ export function AdminPage() {
             setUploadProgress(pct);
           });
         } catch (uploadErr) {
-          const msg =
-            uploadErr instanceof Error
-              ? uploadErr.message
-              : "Image upload failed";
-          toast.error(`Image upload failed: ${msg}`);
+          console.error("[AdminPage] Image upload error:", uploadErr);
+          toast.error(
+            "Image upload failed, try smaller file or paste image URL below",
+          );
+          setUploadFailed(true);
           setSaving(false);
           setUploading(false);
           return;
@@ -1387,6 +1389,22 @@ export function AdminPage() {
                     <Progress value={uploadProgress} className="h-1.5" />
                   </div>
                 )}
+                {/* URL fallback shown after upload failure */}
+                {uploadFailed && (
+                  <div className="mt-3">
+                    <p className="text-xs text-amber-600 mb-1 font-medium">
+                      Upload failed — paste an image URL instead:
+                    </p>
+                    <Input
+                      value={formData.imageUrl}
+                      onChange={(e) =>
+                        setFormData((p) => ({ ...p, imageUrl: e.target.value }))
+                      }
+                      placeholder="https://example.com/image.jpg"
+                      className="mt-1 text-sm border-amber-300 focus:border-amber-500"
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               /* ADD mode */
@@ -1470,8 +1488,13 @@ export function AdminPage() {
                 )}
 
                 <div className="mt-3">
-                  <Label htmlFor="p-image" className="text-xs text-gray-400">
-                    Or paste an image URL (optional)
+                  <Label
+                    htmlFor="p-image"
+                    className={`text-xs ${uploadFailed ? "text-amber-600 font-medium" : "text-gray-400"}`}
+                  >
+                    {uploadFailed
+                      ? "Upload failed — paste an image URL instead:"
+                      : "Or paste an image URL (optional)"}
                   </Label>
                   <Input
                     id="p-image"
@@ -1480,8 +1503,8 @@ export function AdminPage() {
                       setFormData((p) => ({ ...p, imageUrl: e.target.value }))
                     }
                     placeholder="https://..."
-                    className="mt-1 text-sm border-gray-200"
-                    disabled={!!imageFile}
+                    className={`mt-1 text-sm ${uploadFailed ? "border-amber-300 focus:border-amber-500" : "border-gray-200"}`}
+                    disabled={!!imageFile && !uploadFailed}
                     data-ocid="admin.product.image_url.input"
                   />
                   {imageFile && (
