@@ -497,14 +497,15 @@ export class StorageClient {
 
   public async putFile(
     blobBytes: Uint8Array,
-    mimeType = "image/webp",
+    contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
+    const mimeType = contentType || "application/octet-stream";
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes with the correct MIME type
+    // Create a Blob from the bytes
     const file = new Blob([new Uint8Array(blobBytes)], {
       type: mimeType,
     });

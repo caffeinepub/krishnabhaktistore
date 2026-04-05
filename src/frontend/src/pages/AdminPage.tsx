@@ -359,8 +359,10 @@ export function AdminPage() {
       if (imageFile) {
         setUploading(true);
         try {
-          if (!identity) {
-            toast.error("Please log in before uploading an image.");
+          if (!identity || identity.getPrincipal().isAnonymous()) {
+            toast.error(
+              "Please log in with Internet Identity before uploading an image.",
+            );
             setSaving(false);
             setUploading(false);
             return;

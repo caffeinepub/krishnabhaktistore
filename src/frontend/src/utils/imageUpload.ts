@@ -127,7 +127,7 @@ export async function uploadImageFile(
   const { hash } = await storageClient.putFile(
     compressedBytes,
     OUTPUT_MIME,
-    onProgress,
+    onProgress ?? undefined,
   );
   const url = await storageClient.getDirectURL(hash);
   return url;
