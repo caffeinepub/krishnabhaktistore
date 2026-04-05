@@ -4,20 +4,31 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "@tanstack/react-router";
 import { Loader2, Phone, ShieldCheck } from "lucide-react";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { toast } from "sonner";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { usePhoneUser } from "../hooks/usePhoneUser";
 
 export function LoginPage() {
   const { login, isLoggingIn } = useInternetIdentity();
+  const { loginWithPhone } = usePhoneUser();
   const navigate = useNavigate();
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
-  const [generatedOtp, setGeneratedOtp] = useState("");
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [isSending, setIsSending] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // Store OTP temporarily in a ref (not in state to avoid exposing in React DevTools)
+  const otpRef = useRef<string>("");
+  // Track OTP expiry
+  const otpExpiryRef = useRef<number>(0);
+  const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+  function generateOtp(): string {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
 
   function handleSendOtp() {
     const digits = phoneNumber.replace(/\D/g, "");
@@ -27,31 +38,57 @@ export function LoginPage() {
     }
 
     setIsSending(true);
-    const newOtp = String(Math.floor(100000 + Math.random() * 900000));
-    setGeneratedOtp(newOtp);
+    const newOtp = generateOtp();
 
-    // Simulate a small delay for realism
+    // Store OTP temporarily with expiry
+    otpRef.current = newOtp;
+    otpExpiryRef.current = Date.now() + OTP_TTL_MS;
+
+    // Show OTP in console for testing
+    console.log(
+      `[OTP Debug] Phone: ${digits} | OTP: ${newOtp} | Expires in: 5 minutes`,
+    );
+
     setTimeout(() => {
       setIsSending(false);
-      toast.success(`OTP sent! Your demo OTP is: ${newOtp}`);
+      toast.success("OTP sent! Check your phone.", {
+        description: "Demo mode: OTP logged to browser console (F12 → Console)",
+        duration: 6000,
+      });
       setStep("otp");
     }, 800);
   }
 
   function handleVerifyOtp() {
-    if (otp.trim() !== generatedOtp) {
+    // Check if OTP has expired
+    if (Date.now() > otpExpiryRef.current) {
+      toast.error("OTP has expired. Please request a new one.");
+      handleChangeNumber();
+      return;
+    }
+
+    if (otp.trim() !== otpRef.current) {
       toast.error("Invalid OTP. Please try again.");
       return;
     }
 
     setIsVerifying(true);
+
+    // Clear OTP from temporary storage after successful verification
+    otpRef.current = "";
+    otpExpiryRef.current = 0;
+    console.log(
+      "[OTP Debug] OTP verified successfully. Temporary OTP cleared.",
+    );
+
     setTimeout(() => {
       setIsVerifying(false);
-      localStorage.setItem(
-        "phoneUser",
-        JSON.stringify({ phone: phoneNumber, loginMethod: "phone" }),
-      );
-      toast.success("Phone verified! Welcome to KrishnaBhaktiStore");
+      // Log user in: save phone number as user ID and notify all listeners
+      loginWithPhone(phoneNumber.replace(/\D/g, ""));
+      toast.success("Welcome to KrishnaBhaktiStore!", {
+        description: `Logged in as ${phoneNumber}`,
+        duration: 4000,
+      });
       navigate({ to: "/" });
     }, 600);
   }
@@ -59,7 +96,13 @@ export function LoginPage() {
   function handleChangeNumber() {
     setStep("phone");
     setOtp("");
-    setGeneratedOtp("");
+    otpRef.current = "";
+    otpExpiryRef.current = 0;
+  }
+
+  function handleResendOtp() {
+    setOtp("");
+    handleSendOtp();
   }
 
   return (
@@ -150,6 +193,9 @@ export function LoginPage() {
                     <p className="text-sm font-medium text-primary">
                       {phoneNumber}
                     </p>
+                    <p className="text-xs text-amber-600">
+                      OTP expires in 5 minutes
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -189,14 +235,29 @@ export function LoginPage() {
                     )}
                   </Button>
 
-                  <Button
-                    data-ocid="otp.secondary_button"
-                    variant="ghost"
-                    onClick={handleChangeNumber}
-                    className="w-full h-10 text-sm text-muted-foreground hover:text-primary"
-                  >
-                    Change Number
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      data-ocid="otp.resend_button"
+                      variant="outline"
+                      onClick={handleResendOtp}
+                      disabled={isSending}
+                      className="flex-1 h-10 text-sm"
+                    >
+                      {isSending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Resend OTP"
+                      )}
+                    </Button>
+                    <Button
+                      data-ocid="otp.secondary_button"
+                      variant="ghost"
+                      onClick={handleChangeNumber}
+                      className="flex-1 h-10 text-sm text-muted-foreground hover:text-primary"
+                    >
+                      Change Number
+                    </Button>
+                  </div>
                 </>
               )}
             </TabsContent>

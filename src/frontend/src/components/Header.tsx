@@ -1,15 +1,17 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Copy, ShoppingCart, User } from "lucide-react";
+import { Copy, Phone, ShoppingCart, User } from "lucide-react";
 import React, { useState } from "react";
 import { useCart } from "../context/CartContext";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { usePhoneUser } from "../hooks/usePhoneUser";
 
 export function Header() {
   const { itemCount } = useCart();
   const { identity, login, clear } = useInternetIdentity();
+  const { phoneUser, logoutPhone } = usePhoneUser();
   const location = useLocation();
-  const isLoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
-  const principalId = isLoggedIn ? identity.getPrincipal().toText() : null;
+  const isIILoggedIn = !!identity && !identity.getPrincipal().isAnonymous();
+  const principalId = isIILoggedIn ? identity.getPrincipal().toText() : null;
   const [copied, setCopied] = useState(false);
 
   const navLinks = [
@@ -65,9 +67,9 @@ export function Header() {
 
           {/* Actions */}
           <div className="flex items-center gap-3">
-            {isLoggedIn ? (
+            {/* Internet Identity logged-in state */}
+            {isIILoggedIn && (
               <>
-                {/* Principal ID display */}
                 <div className="hidden sm:flex items-center gap-1.5 bg-muted rounded px-2 py-1">
                   <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[120px]">
                     {principalId}
@@ -101,7 +103,30 @@ export function Header() {
                   Logout
                 </button>
               </>
-            ) : (
+            )}
+
+            {/* Phone user logged-in state */}
+            {!isIILoggedIn && phoneUser && (
+              <div className="hidden sm:flex items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-muted rounded px-2 py-1">
+                  <Phone className="h-3 w-3 text-primary flex-shrink-0" />
+                  <span className="text-[11px] font-medium text-foreground">
+                    {phoneUser.phone}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={logoutPhone}
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <User className="h-3.5 w-3.5" />
+                  Logout
+                </button>
+              </div>
+            )}
+
+            {/* Not logged in */}
+            {!isIILoggedIn && !phoneUser && (
               <button
                 type="button"
                 onClick={login}
