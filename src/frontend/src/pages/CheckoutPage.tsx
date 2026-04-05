@@ -15,7 +15,9 @@ import { useCart } from "../context/CartContext";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 import {
+  ADMIN_WHATSAPP_NUMBER,
   type WhatsAppOrderDetails,
+  buildAdminOrderMessage,
   openAdminWhatsAppNotification,
 } from "../utils/whatsapp";
 
@@ -25,6 +27,7 @@ export function CheckoutPage() {
   const { identity } = useInternetIdentity();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [orderPlaced, setOrderPlaced] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -51,6 +54,25 @@ export function CheckoutPage() {
     })),
     total,
   });
+
+  const sendWhatsAppSilently = (details: WhatsAppOrderDetails) => {
+    // Send WhatsApp notification to admin in background without redirecting the customer
+    const message = buildAdminOrderMessage(details);
+    const encoded = encodeURIComponent(message);
+    const url = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encoded}`;
+    // Use an invisible iframe so the browser does not navigate away
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 5000);
+    } catch {
+      // Silently ignore — notification is best-effort
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,14 +102,13 @@ export function CheckoutPage() {
         createdAt: 0n,
       };
 
-      const orderId = await actor.placeOrder(order);
+      await actor.placeOrder(order);
 
-      // Send WhatsApp notification to admin after successful order
-      openAdminWhatsAppNotification(buildWhatsAppDetails());
+      // Send WhatsApp notification to admin silently in background
+      sendWhatsAppSilently(buildWhatsAppDetails());
 
       clearCart();
-      toast.success("Order placed successfully!");
-      navigate({ to: `/order/${orderId.toString()}` });
+      setOrderPlaced(true);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to place order";
       toast.error(msg);
@@ -109,6 +130,27 @@ export function CheckoutPage() {
     }
     openAdminWhatsAppNotification(buildWhatsAppDetails());
   };
+
+  if (orderPlaced) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-20 text-center">
+        <div className="text-5xl mb-6">🙏</div>
+        <h2 className="font-display text-2xl font-bold text-primary mb-3">
+          Order Placed Successfully!
+        </h2>
+        <p className="text-muted-foreground text-lg mb-8">
+          We will contact you soon.
+        </p>
+        <Button
+          onClick={() => navigate({ to: "/products" })}
+          variant="outline"
+          className="mt-2"
+        >
+          Continue Shopping
+        </Button>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
