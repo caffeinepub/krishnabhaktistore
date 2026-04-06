@@ -41,6 +41,7 @@ import {
   ArrowRight,
   Camera,
   CheckCircle,
+  CheckCircle2,
   Clock,
   Home,
   ImagePlus,
@@ -51,10 +52,12 @@ import {
   Package,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Settings,
   ShoppingBag,
   Trash2,
+  UploadCloud,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -231,6 +234,8 @@ export function AdminPage() {
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const [uploadFailed, setUploadFailed] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>("");
+  const [isDragging, setIsDragging] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   // Track original image URL for edit mode revert
@@ -256,6 +261,8 @@ export function AdminPage() {
     setUploadProgress(0);
     setUploading(false);
     setUploadFailed(false);
+    setUploadedImageUrl("");
+    setIsDragging(false);
   };
 
   useEffect(() => {
@@ -316,6 +323,24 @@ export function AdminPage() {
     setDialogOpen(open);
   };
 
+  const triggerAutoUpload = async (file: File) => {
+    if (!identity || identity.getPrincipal().isAnonymous()) return;
+    setUploading(true);
+    setUploadFailed(false);
+    setUploadedImageUrl("");
+    try {
+      const url = await uploadImageFile(file, identity, (pct) =>
+        setUploadProgress(pct),
+      );
+      setUploadedImageUrl(url);
+      setUploading(false);
+    } catch (err) {
+      setUploading(false);
+      setUploadFailed(true);
+      console.error("[AutoUpload] failed:", err);
+    }
+  };
+
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -333,6 +358,28 @@ export function AdminPage() {
     setImageFile(file);
     setImagePreview(previewUrl);
     setUploadProgress(0);
+    triggerAutoUpload(file);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    try {
+      validateImageFile(file);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid image");
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    setImageFile(file);
+    setImagePreview(previewUrl);
+    setUploadProgress(0);
+    if (imageInputRef.current) {
+      imageInputRef.current.value = "";
+    }
+    triggerAutoUpload(file);
   };
 
   const handleClearImage = () => {
@@ -358,33 +405,31 @@ export function AdminPage() {
 
     setSaving(true);
     try {
-      let finalImageUrl = formData.imageUrl;
+      // Prefer already-uploaded URL from auto-upload; fall back to manual URL or retry upload
+      let finalImageUrl = uploadedImageUrl || formData.imageUrl;
 
-      if (imageFile) {
+      if (!uploadedImageUrl && imageFile) {
+        if (!identity || identity.getPrincipal().isAnonymous()) {
+          toast.error(
+            "Please log in with Internet Identity before uploading an image.",
+          );
+          setSaving(false);
+          return;
+        }
         setUploading(true);
         try {
-          if (!identity || identity.getPrincipal().isAnonymous()) {
-            toast.error(
-              "Please log in with Internet Identity before uploading an image.",
-            );
-            setSaving(false);
-            setUploading(false);
-            return;
-          }
           finalImageUrl = await uploadImageFile(imageFile, identity, (pct) => {
             setUploadProgress(pct);
           });
+          setUploadedImageUrl(finalImageUrl);
         } catch (uploadErr) {
           console.error("[AdminPage] Image upload error:", uploadErr);
           toast.error(
             "Image upload failed. Saving product without image — paste a URL below if needed.",
           );
-          // Decouple: clear the failed file so the button stays enabled,
-          // then fall through and save the product with formData.imageUrl (fallback URL or empty).
           setUploadFailed(true);
           setImageFile(null);
-          // finalImageUrl already equals formData.imageUrl (set at top of handleSave),
-          // so the product will be saved without the failed upload.
+          finalImageUrl = formData.imageUrl;
         } finally {
           setUploading(false);
         }
@@ -619,7 +664,6 @@ export function AdminPage() {
 
   const displayPreview =
     imagePreview || (editingProduct ? formData.imageUrl : "");
-  const hasNewFile = !!imagePreview && imagePreview.startsWith("blob:");
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -1342,216 +1386,159 @@ export function AdminPage() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            {/* ── IMAGE SECTION (edit mode) ── */}
-            {editingProduct ? (
-              <div>
-                <Label className="text-sm font-semibold text-gray-700 mb-2 block">
-                  Product Image
-                </Label>
+            {/* ── UNIFIED DRAG & DROP IMAGE UPLOAD ZONE ── */}
+            <div>
+              <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                Product Image
+              </Label>
 
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleImageFileChange}
-                />
+              {/* Hidden file input */}
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp"
+                className="hidden"
+                onChange={handleImageFileChange}
+              />
 
-                {displayPreview ? (
-                  <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                    <img
-                      src={displayPreview}
-                      alt="Product preview"
-                      className="w-full h-48 object-cover"
-                    />
-                    {hasNewFile && (
-                      <button
-                        type="button"
-                        onClick={handleClearImage}
-                        className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                        aria-label="Remove staged image"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="mt-2 w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-8 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => imageInputRef.current?.click()}
-                    data-ocid="admin.product.image.dropzone"
-                  >
-                    <ImagePlus className="h-8 w-8 text-gray-400" />
-                    <p className="text-sm text-gray-500">
-                      Click to upload image
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      JPG, PNG, WebP · max 2 MB
-                    </p>
-                  </button>
-                )}
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3 w-full h-11 text-base border-gray-200"
+              {/* Drop zone */}
+              {displayPreview ? (
+                <div
+                  className="relative rounded-xl overflow-hidden border-2 border-dashed transition-all duration-150 cursor-pointer group"
+                  style={{ borderColor: isDragging ? "#60a5fa" : "#e5e7eb" }}
                   onClick={() => imageInputRef.current?.click()}
-                  disabled={uploading || saving}
-                  data-ocid="admin.product.image.upload_button"
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && imageInputRef.current?.click()
+                  }
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  data-ocid="admin.product.image.dropzone"
                 >
-                  <Camera className="h-4 w-4 mr-2" />
-                  {hasNewFile
-                    ? "Change Image"
-                    : displayPreview
-                      ? "Change Image"
-                      : "Upload Image"}
-                </Button>
-
-                {imageFile && (
-                  <p className="mt-1.5 text-xs text-gray-400 text-center truncate">
-                    {imageFile.name}
-                  </p>
-                )}
-
-                {uploading && (
-                  <div
-                    className="mt-2 space-y-1"
-                    data-ocid="admin.product.image.loading_state"
-                  >
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>Uploading image…</span>
-                      <span>{uploadProgress}%</span>
+                  <img
+                    src={displayPreview}
+                    alt="Product preview"
+                    className="w-full h-44 object-cover"
+                  />
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-150 flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-white/90 rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Change image
                     </div>
-                    <Progress value={uploadProgress} className="h-1.5" />
                   </div>
-                )}
-                {/* URL fallback shown after upload failure */}
-                {uploadFailed && (
-                  <div className="mt-3">
-                    <p className="text-xs text-amber-600 mb-1 font-medium">
-                      Upload failed — paste an image URL instead:
-                    </p>
-                    <Input
-                      value={formData.imageUrl}
-                      onChange={(e) =>
-                        setFormData((p) => ({ ...p, imageUrl: e.target.value }))
-                      }
-                      placeholder="https://example.com/image.jpg"
-                      className="mt-1 text-sm border-amber-300 focus:border-amber-500"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* ADD mode */
-              <div>
-                <Label className="text-sm font-semibold text-gray-700 mb-2 block">
-                  Product Image
-                </Label>
-
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleImageFileChange}
-                />
-
-                {displayPreview ? (
-                  <div className="mt-2 relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
-                    <img
-                      src={displayPreview}
-                      alt="Product preview"
-                      className="w-full h-40 object-cover rounded-xl"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleClearImage}
-                      className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                      aria-label="Remove image"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
+                  {/* X button to clear */}
                   <button
                     type="button"
-                    className="mt-2 w-full flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-8 cursor-pointer hover:bg-gray-100 transition-colors"
-                    onClick={() => imageInputRef.current?.click()}
-                    data-ocid="admin.product.image.dropzone"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClearImage();
+                    }}
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors z-10"
+                    aria-label="Remove image"
+                    data-ocid="admin.product.image.close_button"
                   >
-                    <ImagePlus className="h-8 w-8 text-gray-400" />
-                    <p className="text-sm text-gray-500">
-                      Click to upload image
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      JPG, PNG, WebP supported
-                    </p>
+                    <X className="h-3.5 w-3.5" />
                   </button>
-                )}
-
-                <div className="mt-2 flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="border-gray-200"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={uploading || saving}
-                    data-ocid="admin.product.image.upload_button"
-                  >
-                    <ImagePlus className="h-4 w-4 mr-1.5" />
-                    {imageFile ? "Change Image" : "Upload Image"}
-                  </Button>
-                  {imageFile && (
-                    <span className="text-xs text-gray-400 truncate max-w-[180px]">
-                      {imageFile.name}
-                    </span>
+                  {/* Success indicator */}
+                  {uploadedImageUrl && !uploading && (
+                    <div className="absolute bottom-2 left-2 bg-green-600/90 text-white rounded-md px-2 py-1 flex items-center gap-1.5 text-xs font-medium">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Ready to save
+                    </div>
                   )}
                 </div>
-
-                {uploading && (
+              ) : (
+                <div
+                  className={`w-full flex flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed py-10 cursor-pointer transition-all duration-150 ${
+                    isDragging
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40"
+                  }`}
+                  onClick={() => imageInputRef.current?.click()}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && imageInputRef.current?.click()
+                  }
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  data-ocid="admin.product.image.dropzone"
+                >
                   <div
-                    className="mt-2 space-y-1"
-                    data-ocid="admin.product.image.loading_state"
+                    className={`rounded-full p-3 transition-all duration-150 ${isDragging ? "bg-blue-100" : "bg-gray-100"}`}
                   >
-                    <div className="flex justify-between text-xs text-gray-400">
-                      <span>Uploading image…</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <Progress value={uploadProgress} className="h-1.5" />
+                    <UploadCloud
+                      className={`h-7 w-7 transition-colors duration-150 ${isDragging ? "text-blue-500" : "text-gray-400"}`}
+                    />
                   </div>
-                )}
+                  <div className="text-center">
+                    <p
+                      className={`text-sm font-medium transition-colors duration-150 ${isDragging ? "text-blue-600" : "text-gray-600"}`}
+                    >
+                      {isDragging
+                        ? "Drop to upload"
+                        : "Drag & drop or click to upload"}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      JPG, PNG, WebP · max 2 MB
+                    </p>
+                  </div>
+                </div>
+              )}
 
-                <div className="mt-3">
-                  <Label
-                    htmlFor="p-image"
-                    className={`text-xs ${uploadFailed ? "text-amber-600 font-medium" : "text-gray-400"}`}
-                  >
-                    {uploadFailed
-                      ? "Upload failed — paste an image URL instead:"
-                      : "Or paste an image URL (optional)"}
-                  </Label>
+              {/* Progress bar */}
+              {uploading && (
+                <div
+                  className="mt-2.5 space-y-1"
+                  data-ocid="admin.product.image.loading_state"
+                >
+                  <div className="flex justify-between text-xs text-gray-400">
+                    <span>Uploading…</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-1.5" />
+                </div>
+              )}
+
+              {/* URL fallback on failure */}
+              {uploadFailed && (
+                <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                  <p className="text-xs text-amber-700 font-medium mb-2 flex items-center gap-1.5">
+                    <span>⚠</span> Upload failed — paste an image URL below:
+                  </p>
                   <Input
-                    id="p-image"
                     value={formData.imageUrl}
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, imageUrl: e.target.value }))
                     }
-                    placeholder="https://..."
-                    className={`mt-1 text-sm ${uploadFailed ? "border-amber-300 focus:border-amber-500" : "border-gray-200"}`}
-                    disabled={!!imageFile && !uploadFailed}
+                    placeholder="https://example.com/image.jpg"
+                    className="text-sm border-amber-300 focus:border-amber-500"
                     data-ocid="admin.product.image_url.input"
                   />
-                  {imageFile && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Uploaded image will be used instead of the URL.
-                    </p>
-                  )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Optional URL input (non-failure) */}
+              {!uploadFailed && !imageFile && (
+                <div className="mt-2.5">
+                  <Input
+                    value={formData.imageUrl}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, imageUrl: e.target.value }))
+                    }
+                    placeholder="Or paste image URL (optional)"
+                    className="text-sm border-gray-200 text-gray-500 placeholder:text-gray-400"
+                    data-ocid="admin.product.image_url.input"
+                  />
+                </div>
+              )}
+            </div>
 
             <Separator className="my-1 bg-gray-100" />
 
@@ -1572,27 +1559,6 @@ export function AdminPage() {
                 placeholder="Product name"
                 className="h-12 text-base border-gray-200"
                 data-ocid="admin.product.name.input"
-              />
-            </div>
-
-            {/* Description */}
-            <div>
-              <Label
-                htmlFor="p-desc"
-                className="text-sm font-semibold text-gray-700 mb-1 block"
-              >
-                Description
-              </Label>
-              <Textarea
-                id="p-desc"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, description: e.target.value }))
-                }
-                placeholder="Product description"
-                rows={4}
-                className="text-base resize-none border-gray-200"
-                data-ocid="admin.product.description.textarea"
               />
             </div>
 
@@ -1675,7 +1641,7 @@ export function AdminPage() {
           </div>
 
           {/* Footer Buttons */}
-          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-4">
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-2">
             {editingProduct ? (
               <>
                 <Button
@@ -1693,7 +1659,7 @@ export function AdminPage() {
                 <Button
                   onClick={handleSave}
                   disabled={saving || uploading}
-                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
                   data-ocid="admin.product.dialog.submit_button"
                 >
                   {saving ? (
@@ -1701,37 +1667,44 @@ export function AdminPage() {
                   ) : (
                     <CheckCircle className="h-4 w-4 mr-2" />
                   )}
-                  {saving ? "Saving…" : "Update Product"}
+                  {saving ? "Saving…" : "Save Product"}
                 </Button>
               </>
             ) : (
               <>
                 <Button
+                  type="button"
                   variant="outline"
-                  className="border-gray-200"
-                  onClick={() => handleDialogOpenChange(false)}
+                  className="border-gray-200 text-gray-600 hover:bg-gray-50 h-12 sm:flex-none w-full sm:w-auto"
+                  onClick={() => {
+                    setFormData(defaultForm);
+                    resetImageState();
+                    if (imageInputRef.current) imageInputRef.current.value = "";
+                  }}
+                  disabled={saving || uploading}
                   data-ocid="admin.product.dialog.cancel_button"
                 >
-                  Cancel
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Clear
                 </Button>
                 <Button
                   onClick={handleSave}
                   disabled={saving || uploading}
-                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
                   data-ocid="admin.product.dialog.submit_button"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
-                  {saving ? "Saving…" : "Add Product"}
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  {saving ? "Saving…" : "Save Product"}
                 </Button>
               </>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation AlertDialog */}
       <AlertDialog
         open={deleteAlertOpen}
         onOpenChange={(open) => {

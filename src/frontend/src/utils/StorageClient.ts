@@ -487,50 +487,12 @@ export class StorageClient {
       methodName: "_caffeineStorageCreateCertificate",
       arg: args,
     });
-    const body = result.response.body;
-
-    // Handle v3 response format (preferred)
-    if (isV3ResponseBody(body)) {
-      console.log("[StorageClient] v3 certificate received");
-      return body.certificate;
+    const respone = result.response.body;
+    if (isV3ResponseBody(respone)) {
+      console.log("Certificate:", respone.certificate);
+      return respone.certificate;
     }
-
-    // Handle v2 / legacy response: try to decode Candid reply
-    if (body && typeof body === "object" && "reply" in body) {
-      try {
-        const replyArg = (body as any).reply?.arg as
-          | ArrayBuffer
-          | Uint8Array
-          | undefined;
-        if (replyArg) {
-          const bytes =
-            replyArg instanceof Uint8Array
-              ? replyArg
-              : new Uint8Array(replyArg);
-          const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], bytes);
-          if (decoded?.[0]) {
-            const certVal = decoded[0];
-            if (certVal instanceof Uint8Array) return certVal;
-            if (Array.isArray(certVal))
-              return new Uint8Array(certVal as number[]);
-          }
-        }
-      } catch (decodeErr) {
-        console.warn("[StorageClient] v2 decode attempt failed:", decodeErr);
-      }
-    }
-
-    // Fallback: check for a direct certificate field
-    if (body && typeof body === "object" && "certificate" in body) {
-      const cert = (body as any).certificate;
-      if (cert instanceof Uint8Array) return cert;
-      if (Array.isArray(cert)) return new Uint8Array(cert as number[]);
-    }
-
-    console.error("[StorageClient] Unexpected response body:", body);
-    throw new Error(
-      "Could not extract storage certificate from server response. Upload may be unavailable.",
-    );
+    throw new Error("Expected v3 response body");
   }
 
   public async putFile(
