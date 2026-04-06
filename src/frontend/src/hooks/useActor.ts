@@ -26,13 +26,23 @@ export function useActor() {
       };
 
       const actor = await createActorWithConfig(actorOptions);
+
+      // Only attempt admin token init if a token is present.
+      // Wrap in try-catch so regular customers (phone login) are not blocked
+      // if the token is empty or the call is rejected for non-admin principals.
       const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      await actor._initializeAccessControlWithSecret(adminToken);
+      if (adminToken) {
+        try {
+          await actor._initializeAccessControlWithSecret(adminToken);
+        } catch {
+          // Not an admin or token invalid – continue as regular user
+        }
+      }
+
       return actor;
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 

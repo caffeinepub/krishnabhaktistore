@@ -80,7 +80,11 @@ export function CheckoutPage() {
     status: OrderStatus,
     upiTransactionId = "",
   ) => {
-    if (!actor || items.length === 0) return;
+    if (!actor) {
+      toast.error("Connection error. Please refresh and try again.");
+      return;
+    }
+    if (items.length === 0) return;
     setLoading(true);
     try {
       const customerId =
@@ -120,6 +124,10 @@ export function CheckoutPage() {
 
   const handleCODSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
+      toast.error("Please fill in your Name, Phone, and Address.");
+      return;
+    }
     await placeOrderWithStatus(OrderStatus.pending);
   };
 

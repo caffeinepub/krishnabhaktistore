@@ -39,8 +39,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
-  Camera,
-  CheckCircle,
   CheckCircle2,
   Clock,
   Home,
@@ -56,6 +54,8 @@ import {
   Save,
   Settings,
   ShoppingBag,
+  ShoppingCart,
+  Store,
   Trash2,
   UploadCloud,
   X,
@@ -104,6 +104,7 @@ type ActiveSection = "dashboard" | "products" | "orders" | "content";
 interface StatusConfig {
   label: string;
   classes: string;
+  dotColor: string;
 }
 
 function getStatusConfig(status: OrderStatus): StatusConfig {
@@ -111,32 +112,38 @@ function getStatusConfig(status: OrderStatus): StatusConfig {
     case OrderStatus.pending:
       return {
         label: "Pending",
-        classes: "bg-orange-100 text-orange-700 border border-orange-300",
+        classes: "bg-amber-50 text-amber-700 border border-amber-200",
+        dotColor: "bg-amber-500",
       };
     case OrderStatus.processing:
       return {
-        label: "Paid",
-        classes: "bg-green-100 text-green-700 border border-green-300",
+        label: "Confirmed",
+        classes: "bg-blue-50 text-blue-700 border border-blue-200",
+        dotColor: "bg-blue-500",
       };
     case OrderStatus.shipped:
       return {
-        label: "Shipped",
-        classes: "bg-purple-100 text-purple-700 border border-purple-300",
+        label: "Confirmed",
+        classes: "bg-blue-50 text-blue-700 border border-blue-200",
+        dotColor: "bg-blue-500",
       };
     case OrderStatus.delivered:
       return {
         label: "Delivered",
-        classes: "bg-green-100 text-green-700 border border-green-300",
+        classes: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+        dotColor: "bg-emerald-500",
       };
     case OrderStatus.cancelled:
       return {
         label: "Cancelled",
-        classes: "bg-red-100 text-red-700 border border-red-300",
+        classes: "bg-red-50 text-red-700 border border-red-200",
+        dotColor: "bg-red-500",
       };
     default:
       return {
         label: String(status),
-        classes: "bg-gray-100 text-gray-700 border border-gray-300",
+        classes: "bg-gray-50 text-gray-700 border border-gray-200",
+        dotColor: "bg-gray-400",
       };
   }
 }
@@ -146,7 +153,7 @@ function getNextStatus(current: OrderStatus): OrderStatus | null {
     case OrderStatus.pending:
       return OrderStatus.processing;
     case OrderStatus.processing:
-      return OrderStatus.shipped;
+      return OrderStatus.delivered;
     case OrderStatus.shipped:
       return OrderStatus.delivered;
     case OrderStatus.delivered:
@@ -170,7 +177,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "products", label: "Products", icon: Package },
   { id: "orders", label: "Orders", icon: ShoppingBag },
-  { id: "content", label: "Website Settings", icon: Settings },
 ];
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -181,6 +187,7 @@ interface StatCardProps {
   icon: React.ElementType;
   colorClass: string;
   bgClass: string;
+  borderClass: string;
 }
 
 function StatCard({
@@ -189,15 +196,22 @@ function StatCard({
   icon: Icon,
   colorClass,
   bgClass,
+  borderClass,
 }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 flex items-center justify-between">
-      <div>
-        <p className="text-sm text-gray-500 mb-1">{label}</p>
-        <p className="text-3xl font-bold text-gray-900">{value}</p>
-      </div>
-      <div className={`${bgClass} rounded-xl p-3`}>
+    <div
+      className={`bg-white rounded-2xl p-5 shadow-sm border ${borderClass} flex items-center gap-4 group hover:shadow-md transition-shadow duration-200`}
+    >
+      <div
+        className={`${bgClass} rounded-xl p-3.5 flex items-center justify-center shrink-0`}
+      >
         <Icon className={`h-6 w-6 ${colorClass}`} />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1 truncate">
+          {label}
+        </p>
+        <p className="text-3xl font-bold text-gray-900 leading-none">{value}</p>
       </div>
     </div>
   );
@@ -536,22 +550,30 @@ export function AdminPage() {
   const SidebarContent = ({ onItemClick }: { onItemClick?: () => void }) => (
     <div className="flex flex-col h-full">
       {/* Logo area */}
-      <div className="px-5 py-5 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">K</span>
+      <div
+        className="px-5 py-6 border-b"
+        style={{ borderColor: "oklch(35% 0.14 264)" }}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+            <Store className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <p className="font-bold text-gray-900 text-sm leading-none">
-              KrishnaBhakti
+          <div className="min-w-0">
+            <p className="font-bold text-white text-sm leading-tight truncate">
+              KrishnaBhaktiStore
             </p>
-            <p className="text-xs text-gray-400 mt-0.5">Seller Panel</p>
+            <p
+              className="text-xs mt-0.5"
+              style={{ color: "oklch(75% 0.04 264 / 0.7)" }}
+            >
+              Seller Panel
+            </p>
           </div>
         </div>
       </div>
 
       {/* Nav items */}
-      <nav className="flex-1 px-3 py-4 space-y-1" aria-label="Admin navigation">
+      <nav className="flex-1 px-3 py-5 space-y-1" aria-label="Admin navigation">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = activeSection === item.id;
@@ -563,22 +585,21 @@ export function AdminPage() {
                 setActiveSection(item.id);
                 onItemClick?.();
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+              className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
                 isActive
-                  ? "bg-blue-50 text-blue-700 font-semibold"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  ? "bg-white text-[oklch(27%_0.12_264)] shadow-sm"
+                  : "text-white/80 hover:bg-white/10 hover:text-white"
               }`}
               data-ocid={`admin.nav.${item.id}.link`}
             >
               <Icon
-                className={`h-4.5 w-4.5 shrink-0 ${
-                  isActive ? "text-blue-600" : "text-gray-400"
+                className={`h-[18px] w-[18px] shrink-0 ${
+                  isActive ? "text-[oklch(27%_0.12_264)]" : "text-white/70"
                 }`}
-                size={18}
               />
-              {item.label}
+              <span className="truncate">{item.label}</span>
               {isActive && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-600" />
+                <span className="ml-auto w-2 h-2 rounded-full bg-[oklch(27%_0.12_264)] opacity-60" />
               )}
             </button>
           );
@@ -586,14 +607,17 @@ export function AdminPage() {
       </nav>
 
       {/* Bottom: Go to Store */}
-      <div className="px-3 py-4 border-t border-gray-100">
+      <div
+        className="px-3 py-4 border-t"
+        style={{ borderColor: "oklch(35% 0.14 264)" }}
+      >
         <button
           type="button"
           onClick={() => navigate({ to: "/" })}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all duration-200"
+          className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200"
           data-ocid="admin.nav.store.link"
         >
-          <Home className="text-gray-400" size={18} />
+          <Home className="h-[18px] w-[18px] shrink-0 text-white/50" />
           Go to Store
         </button>
       </div>
@@ -604,18 +628,27 @@ export function AdminPage() {
 
   if (!isLoggedIn) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-sm w-full text-center">
-          <div className="text-5xl mb-4">🔐</div>
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ backgroundColor: "#f8fafc" }}
+      >
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-10 max-w-sm w-full text-center">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5"
+            style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+          >
+            <Store className="h-8 w-8 text-white" />
+          </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
             Admin Access
           </h2>
-          <p className="text-gray-500 text-sm mb-6">
-            Please log in with Internet Identity to access the admin panel.
+          <p className="text-gray-500 text-sm mb-7">
+            Log in with Internet Identity to access the seller panel.
           </p>
           <Button
             onClick={login}
-            className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+            className="w-full h-12 text-white font-semibold rounded-xl text-base"
+            style={{ backgroundColor: "oklch(27% 0.12 264)" }}
             data-ocid="admin.login.button"
           >
             Login with Internet Identity
@@ -628,12 +661,18 @@ export function AdminPage() {
   if (loading) {
     return (
       <div
-        className="min-h-screen bg-gray-50 flex items-center justify-center"
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: "#f8fafc" }}
         data-ocid="admin.loading_state"
       >
         <div className="text-center">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-600 mx-auto mb-3" />
-          <p className="text-gray-500 text-sm">Loading panel...</p>
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+          >
+            <Loader2 className="h-8 w-8 animate-spin text-white" />
+          </div>
+          <p className="text-gray-500 text-sm font-medium">Loading panel…</p>
         </div>
       </div>
     );
@@ -641,8 +680,11 @@ export function AdminPage() {
 
   if (isAdmin === false) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 max-w-sm w-full text-center">
+      <div
+        className="min-h-screen flex items-center justify-center px-4"
+        style={{ backgroundColor: "#f8fafc" }}
+      >
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-10 max-w-sm w-full text-center">
           <div className="text-5xl mb-4">🚫</div>
           <h2 className="text-2xl font-bold text-red-600 mb-2">
             Access Denied
@@ -653,7 +695,7 @@ export function AdminPage() {
           <Button
             onClick={() => navigate({ to: "/" })}
             variant="outline"
-            className="w-full"
+            className="w-full h-12 rounded-xl text-base"
           >
             Go Home
           </Button>
@@ -666,110 +708,113 @@ export function AdminPage() {
     imagePreview || (editingProduct ? formData.imageUrl : "");
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* ── TOP HEADER ──────────────────────────────────────────────────── */}
-      <header className="h-16 bg-white border-b border-gray-200 shadow-sm flex items-center px-4 md:px-6 gap-4 sticky top-0 z-30">
-        {/* Hamburger (mobile only) */}
-        <button
-          type="button"
-          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
-          onClick={() => setSidebarOpen(true)}
-          aria-label="Open menu"
-          data-ocid="admin.header.menu.button"
-        >
-          <Menu size={20} />
-        </button>
+    <div className="min-h-screen flex" style={{ backgroundColor: "#f1f5f9" }}>
+      {/* ── DESKTOP SIDEBAR ──────────────────────────────────────────────── */}
+      <aside
+        className="hidden md:flex flex-col w-64 shrink-0 fixed top-0 left-0 h-full z-20"
+        style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+      >
+        <SidebarContent />
+      </aside>
 
-        {/* Brand */}
-        <div className="flex items-center gap-2 flex-1">
-          <div className="hidden md:flex w-8 h-8 rounded-lg bg-blue-600 items-center justify-center">
-            <span className="text-white font-bold text-sm">K</span>
-          </div>
-          <div className="hidden md:block">
-            <span className="font-bold text-gray-900 text-base">
-              KrishnaBhakti
-            </span>
-            <span className="text-gray-400 text-sm ml-2">Seller Panel</span>
-          </div>
-          <span className="md:hidden font-bold text-gray-900 text-base">
-            Seller Panel
-          </span>
-        </div>
-
-        {/* Right: user info */}
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:block text-sm text-gray-500 truncate max-w-[140px]">
-            Admin
-          </span>
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-            <span className="text-white text-xs font-bold">{adminInitial}</span>
-          </div>
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* ── DESKTOP SIDEBAR ────────────────────────────────────────────── */}
-        <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white border-r border-gray-200 shadow-sm">
-          <SidebarContent />
-        </aside>
-
-        {/* ── MOBILE SIDEBAR DRAWER ──────────────────────────────────────── */}
-        <AnimatePresence>
-          {sidebarOpen && (
-            <>
-              {/* Overlay */}
-              <motion.div
-                key="overlay"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="fixed inset-0 bg-black/40 z-40 md:hidden"
+      {/* ── MOBILE SIDEBAR DRAWER ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            {/* Overlay */}
+            <motion.div
+              key="overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-black/50 z-40 md:hidden backdrop-blur-sm"
+              onClick={() => setSidebarOpen(false)}
+            />
+            {/* Drawer */}
+            <motion.aside
+              key="drawer"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+              className="fixed top-0 left-0 h-full w-72 z-50 md:hidden flex flex-col"
+              style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+            >
+              {/* Close button */}
+              <button
+                type="button"
                 onClick={() => setSidebarOpen(false)}
-              />
-              {/* Drawer */}
-              <motion.aside
-                key="drawer"
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ type: "spring", damping: 28, stiffness: 280 }}
-                className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-xl z-50 md:hidden"
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center text-white hover:bg-white/25 transition-colors"
+                aria-label="Close menu"
+                data-ocid="admin.sidebar.close_button"
               >
-                {/* Close button */}
-                <button
-                  type="button"
-                  className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:bg-gray-100"
-                  onClick={() => setSidebarOpen(false)}
-                  aria-label="Close menu"
-                >
-                  <X size={16} />
-                </button>
-                <SidebarContent onItemClick={() => setSidebarOpen(false)} />
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
+                <X className="h-4 w-4" />
+              </button>
+              <SidebarContent onItemClick={() => setSidebarOpen(false)} />
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
 
-        {/* ── MAIN CONTENT ───────────────────────────────────────────────── */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
-          <AnimatePresence>
+      {/* ── MAIN AREA (offset by sidebar on desktop) ─────────────────────── */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen">
+        {/* ── TOP HEADER ────────────────────────────────────────────────── */}
+        <header className="h-16 bg-white border-b border-gray-200 shadow-sm flex items-center px-4 md:px-6 gap-4 sticky top-0 z-30">
+          {/* Hamburger (mobile only) */}
+          <button
+            type="button"
+            className="md:hidden flex items-center justify-center w-10 h-10 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+            data-ocid="admin.header.menu.button"
+          >
+            <Menu size={22} />
+          </button>
+
+          {/* Section breadcrumb */}
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-base font-bold text-gray-900">
+              {activeSection === "dashboard" && "Dashboard"}
+              {activeSection === "products" && "Products"}
+              {activeSection === "orders" && "Orders"}
+              {activeSection === "content" && "Website Settings"}
+            </span>
+          </div>
+
+          {/* Right: admin badge */}
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:block text-sm text-gray-500 font-medium">
+              Admin
+            </span>
+            <div
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
+              style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+            >
+              {adminInitial}
+            </div>
+          </div>
+        </header>
+
+        {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
+        <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+          <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
+              exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.18 }}
             >
-              {/* ── DASHBOARD ──────────────────────────────────────────── */}
+              {/* ── DASHBOARD ────────────────────────────────────────── */}
               {activeSection === "dashboard" && (
                 <div className="space-y-6">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">
-                      Dashboard
+                      Welcome back 👋
                     </h1>
                     <p className="text-sm text-gray-500 mt-1">
-                      Overview of your store
+                      Here&apos;s what&apos;s happening in your store today.
                     </p>
                   </div>
 
@@ -779,98 +824,115 @@ export function AdminPage() {
                       label="Total Products"
                       value={products.length}
                       icon={Package}
-                      colorClass="text-blue-600"
-                      bgClass="bg-blue-50"
+                      colorClass="text-indigo-600"
+                      bgClass="bg-indigo-50"
+                      borderClass="border-indigo-100"
                     />
                     <StatCard
                       label="Total Orders"
                       value={orders.length}
-                      icon={ShoppingBag}
-                      colorClass="text-purple-600"
-                      bgClass="bg-purple-50"
+                      icon={ShoppingCart}
+                      colorClass="text-violet-600"
+                      bgClass="bg-violet-50"
+                      borderClass="border-violet-100"
                     />
                     <StatCard
                       label="Pending Orders"
                       value={pendingCount}
                       icon={Clock}
-                      colorClass="text-orange-600"
-                      bgClass="bg-orange-50"
+                      colorClass="text-amber-600"
+                      bgClass="bg-amber-50"
+                      borderClass="border-amber-100"
                     />
                     <StatCard
                       label="Revenue"
                       value={`₹${(totalRevenue / 100).toFixed(0)}`}
                       icon={IndianRupee}
-                      colorClass="text-green-600"
-                      bgClass="bg-green-50"
+                      colorClass="text-emerald-600"
+                      bgClass="bg-emerald-50"
+                      borderClass="border-emerald-100"
                     />
                   </div>
 
                   {/* Recent Orders */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-                      <h2 className="font-semibold text-gray-900">
-                        Recent Orders
-                      </h2>
+                  <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                      <div>
+                        <h2 className="font-bold text-gray-900 text-base">
+                          Recent Orders
+                        </h2>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Latest {recentOrders.length} orders
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setActiveSection("orders")}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                        className="text-sm font-semibold flex items-center gap-1.5 px-4 py-2 rounded-xl transition-colors hover:bg-gray-50"
+                        style={{ color: "oklch(27% 0.12 264)" }}
                         data-ocid="admin.dashboard.view_orders.button"
                       >
-                        View All Orders →
+                        View All
+                        <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
                     {recentOrders.length === 0 ? (
                       <div
-                        className="py-10 text-center text-gray-400 text-sm"
+                        className="py-12 text-center text-gray-400 text-sm"
                         data-ocid="admin.dashboard.orders.empty_state"
                       >
+                        <ShoppingBag className="h-10 w-10 text-gray-200 mx-auto mb-3" />
                         No orders yet.
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                           <thead>
-                            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                              <th className="text-left px-5 py-3 font-medium">
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                              <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Order ID
                               </th>
-                              <th className="text-left px-5 py-3 font-medium">
+                              <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Customer
                               </th>
-                              <th className="text-left px-5 py-3 font-medium">
+                              <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Total
                               </th>
-                              <th className="text-left px-5 py-3 font-medium">
+                              <th className="text-left px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider">
                                 Status
                               </th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100">
+                          <tbody className="divide-y divide-gray-50">
                             {recentOrders.map((order, i) => {
                               const statusCfg = getStatusConfig(order.status);
                               return (
                                 <tr
                                   key={order.id.toString()}
-                                  className="hover:bg-gray-50 transition-colors"
+                                  className="hover:bg-gray-50/70 transition-colors"
                                   data-ocid={`admin.dashboard.orders.item.${i + 1}`}
                                 >
-                                  <td className="px-5 py-3 font-mono text-gray-600">
-                                    #{order.id.toString()}
+                                  <td className="px-6 py-4">
+                                    <span className="font-mono text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                                      #{order.id.toString()}
+                                    </span>
                                   </td>
-                                  <td className="px-5 py-3 font-medium text-gray-900">
+                                  <td className="px-6 py-4 font-semibold text-gray-900">
                                     {order.customerName}
                                   </td>
-                                  <td className="px-5 py-3 text-gray-700">
+                                  <td className="px-6 py-4 font-bold text-gray-900">
                                     ₹
                                     {(Number(order.totalAmount) / 100).toFixed(
                                       2,
                                     )}
                                   </td>
-                                  <td className="px-5 py-3">
+                                  <td className="px-6 py-4">
                                     <span
-                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusCfg.classes}`}
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${statusCfg.classes}`}
                                     >
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotColor}`}
+                                      />
                                       {statusCfg.label}
                                     </span>
                                   </td>
@@ -885,48 +947,61 @@ export function AdminPage() {
                 </div>
               )}
 
-              {/* ── PRODUCTS ───────────────────────────────────────────── */}
+              {/* ── PRODUCTS ──────────────────────────────────────────── */}
               {activeSection === "products" && (
                 <div className="space-y-5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
                       <h1 className="text-2xl font-bold text-gray-900">
                         Products
                       </h1>
                       <p className="text-sm text-gray-500 mt-1">
-                        {products.length} products in catalog
+                        {products.length}{" "}
+                        {products.length === 1 ? "product" : "products"} in
+                        catalog
                       </p>
                     </div>
                     <Button
                       onClick={openAddDialog}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
+                      className="h-11 px-5 text-white font-semibold rounded-xl text-sm shadow-sm hover:shadow-md transition-shadow"
+                      style={{ backgroundColor: "oklch(27% 0.12 264)" }}
                       data-ocid="admin.add_product.button"
                     >
-                      <Plus className="h-4 w-4 mr-1.5" />
+                      <Plus className="h-4 w-4 mr-2" />
                       Add Product
                     </Button>
                   </div>
 
                   {products.length === 0 ? (
                     <div
-                      className="bg-white rounded-xl shadow-sm border border-gray-100 py-16 text-center"
+                      className="bg-white rounded-2xl shadow-sm border border-gray-100 py-20 flex flex-col items-center gap-3"
                       data-ocid="admin.products.empty_state"
                     >
-                      <Package className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-400 text-sm">
-                        No products yet. Click "Add Product" to get started.
+                      <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+                        <Package className="h-8 w-8 text-gray-300" />
+                      </div>
+                      <p className="text-gray-400 text-sm font-medium">
+                        No products yet.
                       </p>
+                      <Button
+                        onClick={openAddDialog}
+                        className="mt-2 h-11 px-5 text-white font-semibold rounded-xl"
+                        style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add First Product
+                      </Button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {products.map((product, index) => (
                         <div
                           key={product.id.toString()}
-                          className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col"
+                          className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-200"
                           data-ocid={`admin.products.card.${index + 1}`}
                         >
                           {/* Product Image */}
-                          <div className="w-full h-40 bg-gray-50 flex items-center justify-center overflow-hidden">
+                          <div className="w-full h-48 bg-gray-50 flex items-center justify-center overflow-hidden relative">
                             {product.imageUrl ? (
                               <img
                                 src={product.imageUrl}
@@ -938,20 +1013,30 @@ export function AdminPage() {
                                 }}
                               />
                             ) : (
-                              <Package className="h-12 w-12 text-gray-200" />
+                              <Package className="h-14 w-14 text-gray-200" />
                             )}
+                            {/* Active badge */}
+                            <span
+                              className={`absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full ${
+                                product.isActive
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-gray-100 text-gray-400"
+                              }`}
+                            >
+                              {product.isActive ? "Active" : "Inactive"}
+                            </span>
                           </div>
 
                           {/* Card Body */}
-                          <div className="p-4 flex flex-col flex-1 gap-2">
+                          <div className="p-4 flex flex-col flex-1 gap-3">
                             <div className="flex items-start justify-between gap-2">
-                              <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">
+                              <h3 className="font-bold text-gray-900 text-sm leading-tight line-clamp-2">
                                 {product.name}
                               </h3>
                               <span
-                                className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
                                   product.category === ProductCategory.book
-                                    ? "bg-blue-50 text-blue-700"
+                                    ? "bg-indigo-50 text-indigo-700"
                                     : "bg-amber-50 text-amber-700"
                                 }`}
                               >
@@ -959,32 +1044,23 @@ export function AdminPage() {
                               </span>
                             </div>
 
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="font-bold text-gray-900">
+                            <div className="flex items-center justify-between">
+                              <span
+                                className="text-xl font-bold"
+                                style={{ color: "oklch(27% 0.12 264)" }}
+                              >
                                 ₹{(Number(product.priceCents) / 100).toFixed(2)}
                               </span>
-                              <span className="text-gray-500 text-xs">
+                              <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-1 rounded-full">
                                 Stock: {product.stockQuantity.toString()}
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-1 mb-1">
-                              <span
-                                className={`text-xs font-medium ${
-                                  product.isActive
-                                    ? "text-green-600"
-                                    : "text-gray-400"
-                                }`}
-                              >
-                                {product.isActive ? "● Active" : "○ Inactive"}
-                              </span>
-                            </div>
-
                             {/* Action Buttons */}
-                            <div className="flex gap-2 mt-auto pt-2 border-t border-gray-100">
+                            <div className="flex gap-2.5 mt-auto pt-3 border-t border-gray-100">
                               <button
                                 type="button"
-                                className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 text-sm font-medium hover:bg-blue-100 active:bg-blue-200 transition-colors cursor-pointer"
+                                className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-semibold hover:bg-indigo-100 hover:border-indigo-300 active:scale-95 transition-all cursor-pointer"
                                 onClick={() => openEditDialog(product)}
                                 data-ocid={`admin.products.edit_button.${index + 1}`}
                               >
@@ -993,7 +1069,7 @@ export function AdminPage() {
                               </button>
                               <button
                                 type="button"
-                                className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg border border-red-200 bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 active:bg-red-200 transition-colors cursor-pointer"
+                                className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border-2 border-red-200 bg-red-50 text-red-600 text-sm font-semibold hover:bg-red-100 hover:border-red-300 active:scale-95 transition-all cursor-pointer"
                                 onClick={() => triggerDelete(product)}
                                 data-ocid={`admin.products.delete_button.${index + 1}`}
                               >
@@ -1009,206 +1085,358 @@ export function AdminPage() {
                 </div>
               )}
 
-              {/* ── ORDERS ─────────────────────────────────────────────── */}
+              {/* ── ORDERS ────────────────────────────────────────────── */}
               {activeSection === "orders" && (
                 <div className="space-y-5">
-                  <div className="flex items-center justify-between">
-                    <div>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex-1 min-w-0">
                       <h1 className="text-2xl font-bold text-gray-900">
                         Orders
                       </h1>
                       <p className="text-sm text-gray-500 mt-1">
                         {orders.length} total orders
+                        {pendingCount > 0 && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-amber-700 font-semibold">
+                            · {pendingCount} pending
+                          </span>
+                        )}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
-                      New (last 24h)
-                    </div>
                   </div>
 
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                    {orders.length === 0 ? (
-                      <div
-                        className="py-16 text-center text-gray-400 text-sm"
-                        data-ocid="admin.orders.empty_state"
-                      >
+                  {orders.length === 0 ? (
+                    <div
+                      className="bg-white rounded-2xl shadow-sm border border-gray-100 py-20 flex flex-col items-center gap-3"
+                      data-ocid="admin.orders.empty_state"
+                    >
+                      <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+                        <ShoppingBag className="h-8 w-8 text-gray-300" />
+                      </div>
+                      <p className="text-gray-400 text-sm font-medium">
                         No orders yet.
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table data-ocid="admin.orders.table">
-                          <TableHeader>
-                            <TableRow className="bg-gray-50">
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Order ID
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Customer Name
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Phone
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Address
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Products
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Total Price
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Transaction ID
-                              </TableHead>
-                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
-                                Status
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {orders.map((order, index) => {
-                              const nowNs = BigInt(Date.now()) * 1_000_000n;
-                              const isNew =
-                                nowNs - order.createdAt < 86_400_000_000_000n;
-                              const statusCfg = getStatusConfig(order.status);
-                              const nextStatus = getNextStatus(order.status);
-                              const nextStatusCfg = nextStatus
-                                ? getStatusConfig(nextStatus)
-                                : null;
-
-                              return (
-                                <TableRow
-                                  key={order.id.toString()}
-                                  className={`transition-colors ${
-                                    isNew
-                                      ? "bg-amber-50 hover:bg-amber-100/60"
-                                      : "hover:bg-gray-50"
-                                  }`}
-                                  data-ocid={`admin.orders.row.${index + 1}`}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Mobile: card list */}
+                      <div className="md:hidden space-y-3">
+                        {orders.map((order, index) => {
+                          const nowNs = BigInt(Date.now()) * 1_000_000n;
+                          const isNew =
+                            nowNs - order.createdAt < 86_400_000_000_000n;
+                          const statusCfg = getStatusConfig(order.status);
+                          const nextStatus = getNextStatus(order.status);
+                          const nextStatusCfg = nextStatus
+                            ? getStatusConfig(nextStatus)
+                            : null;
+                          return (
+                            <div
+                              key={order.id.toString()}
+                              className={`bg-white rounded-2xl border shadow-sm p-4 space-y-3 ${
+                                isNew
+                                  ? "border-amber-200 bg-amber-50/30"
+                                  : "border-gray-100"
+                              }`}
+                              data-ocid={`admin.orders.row.${index + 1}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
+                                    #{order.id.toString()}
+                                  </span>
+                                  {isNew && (
+                                    <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                                      NEW
+                                    </span>
+                                  )}
+                                </div>
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${statusCfg.classes}`}
+                                  data-ocid={`admin.orders.status_badge.${index + 1}`}
                                 >
-                                  <TableCell className="font-mono text-sm whitespace-nowrap">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-gray-400">#</span>
-                                      <span className="font-semibold text-gray-900">
-                                        {order.id.toString()}
-                                      </span>
-                                      {isNew && (
-                                        <span
-                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-amber-900"
-                                          data-ocid={`admin.orders.new_badge.${index + 1}`}
-                                        >
-                                          NEW
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-
-                                  <TableCell className="whitespace-nowrap font-medium text-gray-900">
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotColor}`}
+                                  />
+                                  {statusCfg.label}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <p className="text-xs text-gray-400 font-medium mb-0.5">
+                                    Customer
+                                  </p>
+                                  <p className="font-bold text-gray-900">
                                     {order.customerName}
-                                  </TableCell>
-
-                                  <TableCell className="whitespace-nowrap">
-                                    <span className="text-sm font-mono text-gray-600">
-                                      {order.customerPhone || "—"}
-                                    </span>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <span
-                                      className="block max-w-[150px] truncate text-sm text-gray-500"
-                                      title={order.shippingAddress}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 font-medium mb-0.5">
+                                    Phone
+                                  </p>
+                                  <p className="font-mono text-gray-600">
+                                    {order.customerPhone || "—"}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 font-medium mb-0.5">
+                                    Total
+                                  </p>
+                                  <p className="font-bold text-gray-900">
+                                    ₹
+                                    {(Number(order.totalAmount) / 100).toFixed(
+                                      2,
+                                    )}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-400 font-medium mb-0.5">
+                                    Items
+                                  </p>
+                                  <p className="text-gray-700">
+                                    {order.items.length} item(s)
+                                  </p>
+                                </div>
+                              </div>
+                              {order.shippingAddress && (
+                                <div className="text-sm">
+                                  <p className="text-xs text-gray-400 font-medium mb-0.5">
+                                    Address
+                                  </p>
+                                  <p className="text-gray-600 truncate">
+                                    {order.shippingAddress}
+                                  </p>
+                                </div>
+                              )}
+                              {order.upiTransactionId && (
+                                <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-100">
+                                  <p className="text-xs text-blue-500 font-medium mb-1">
+                                    UPI Transaction ID
+                                  </p>
+                                  <p className="font-mono text-xs text-blue-800 font-semibold break-all">
+                                    {order.upiTransactionId}
+                                  </p>
+                                  {order.status === OrderStatus.pending && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleStatusChange(
+                                          order.id,
+                                          OrderStatus.processing,
+                                        )
+                                      }
+                                      className="mt-2 w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors"
+                                      data-ocid={`admin.orders.verify_payment.${index + 1}`}
                                     >
-                                      {order.shippingAddress || "—"}
-                                    </span>
-                                  </TableCell>
-
-                                  <TableCell className="whitespace-nowrap">
-                                    <span className="text-sm font-medium text-gray-700">
-                                      {order.items.length} item(s)
-                                    </span>
-                                  </TableCell>
-
-                                  <TableCell className="whitespace-nowrap">
-                                    <span className="font-bold text-gray-900">
-                                      ₹
-                                      {(
-                                        Number(order.totalAmount) / 100
-                                      ).toFixed(2)}
-                                    </span>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <div className="flex flex-col gap-1.5">
-                                      {order.upiTransactionId ? (
-                                        <>
-                                          <span className="text-xs font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded break-all">
-                                            {order.upiTransactionId}
-                                          </span>
-                                          {order.status ===
-                                            OrderStatus.pending && (
-                                            <button
-                                              type="button"
-                                              onClick={() =>
-                                                handleStatusChange(
-                                                  order.id,
-                                                  OrderStatus.processing,
-                                                )
-                                              }
-                                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-green-600 hover:bg-green-700 text-white transition-colors whitespace-nowrap"
-                                              data-ocid={`admin.orders.verify_payment.${index + 1}`}
-                                            >
-                                              ✓ Verify Payment
-                                            </button>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <span className="text-xs text-gray-400">
-                                          —
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-
-                                  <TableCell>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span
-                                        className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${statusCfg.classes}`}
-                                        data-ocid={`admin.orders.status_badge.${index + 1}`}
-                                      >
-                                        {statusCfg.label}
-                                      </span>
-                                      {nextStatus && nextStatusCfg && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleStatusChange(
-                                              order.id,
-                                              nextStatus,
-                                            )
-                                          }
-                                          title={`Advance to ${nextStatusCfg.label}`}
-                                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 transition-colors whitespace-nowrap text-gray-600"
-                                          data-ocid={`admin.orders.advance_button.${index + 1}`}
-                                        >
-                                          <ArrowRight className="h-3 w-3" />
-                                          {nextStatusCfg.label}
-                                        </button>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
+                                      ✓ Verify Payment
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {nextStatus && nextStatusCfg && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleStatusChange(order.id, nextStatus)
+                                  }
+                                  className={`w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                                    nextStatus === OrderStatus.processing
+                                      ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                      : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  }`}
+                                  data-ocid={`admin.orders.advance_button.${index + 1}`}
+                                >
+                                  <ArrowRight className="h-4 w-4" />
+                                  Mark {nextStatusCfg.label}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                    )}
-                  </div>
+
+                      {/* Desktop: table */}
+                      <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-gray-50 border-b border-gray-100 hover:bg-gray-50">
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Order ID
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Customer
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Phone
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Address
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Items
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Total
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Transaction ID
+                                </TableHead>
+                                <TableHead className="text-gray-400 text-xs font-bold uppercase tracking-wider px-5 py-4 whitespace-nowrap">
+                                  Status
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {orders.map((order, index) => {
+                                const nowNs = BigInt(Date.now()) * 1_000_000n;
+                                const isNew =
+                                  nowNs - order.createdAt < 86_400_000_000_000n;
+                                const statusCfg = getStatusConfig(order.status);
+                                const nextStatus = getNextStatus(order.status);
+                                const nextStatusCfg = nextStatus
+                                  ? getStatusConfig(nextStatus)
+                                  : null;
+
+                                return (
+                                  <TableRow
+                                    key={order.id.toString()}
+                                    className={`transition-colors ${
+                                      isNew
+                                        ? "bg-amber-50/50 hover:bg-amber-50"
+                                        : "hover:bg-gray-50/70"
+                                    }`}
+                                    data-ocid={`admin.orders.row.${index + 1}`}
+                                  >
+                                    <TableCell className="px-5 py-4">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded-md whitespace-nowrap">
+                                          #{order.id.toString()}
+                                        </span>
+                                        {isNew && (
+                                          <span
+                                            className="text-[10px] font-bold uppercase tracking-wider bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full whitespace-nowrap"
+                                            data-ocid={`admin.orders.new_badge.${index + 1}`}
+                                          >
+                                            NEW
+                                          </span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4 font-semibold text-gray-900 whitespace-nowrap">
+                                      {order.customerName}
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4 whitespace-nowrap">
+                                      <span className="text-sm font-mono text-gray-500">
+                                        {order.customerPhone || "—"}
+                                      </span>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4">
+                                      <span
+                                        className="block max-w-[160px] truncate text-sm text-gray-500"
+                                        title={order.shippingAddress}
+                                      >
+                                        {order.shippingAddress || "—"}
+                                      </span>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4 whitespace-nowrap">
+                                      <span className="text-sm font-semibold text-gray-700 bg-gray-100 px-2.5 py-1 rounded-full">
+                                        {order.items.length} item
+                                        {order.items.length !== 1 ? "s" : ""}
+                                      </span>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4 whitespace-nowrap">
+                                      <span className="font-bold text-gray-900">
+                                        ₹
+                                        {(
+                                          Number(order.totalAmount) / 100
+                                        ).toFixed(2)}
+                                      </span>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4">
+                                      <div className="flex flex-col gap-2">
+                                        {order.upiTransactionId ? (
+                                          <>
+                                            <span className="text-xs font-mono text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 break-all">
+                                              {order.upiTransactionId}
+                                            </span>
+                                            {order.status ===
+                                              OrderStatus.pending && (
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleStatusChange(
+                                                    order.id,
+                                                    OrderStatus.processing,
+                                                  )
+                                                }
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors whitespace-nowrap"
+                                                data-ocid={`admin.orders.verify_payment.${index + 1}`}
+                                              >
+                                                ✓ Verify Payment
+                                              </button>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <span className="text-xs text-gray-300">
+                                            —
+                                          </span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+
+                                    <TableCell className="px-5 py-4">
+                                      <div className="flex flex-col gap-2">
+                                        <span
+                                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap ${statusCfg.classes}`}
+                                          data-ocid={`admin.orders.status_badge.${index + 1}`}
+                                        >
+                                          <span
+                                            className={`w-1.5 h-1.5 rounded-full ${statusCfg.dotColor}`}
+                                          />
+                                          {statusCfg.label}
+                                        </span>
+                                        {nextStatus && nextStatusCfg && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleStatusChange(
+                                                order.id,
+                                                nextStatus,
+                                              )
+                                            }
+                                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+                                              nextStatus ===
+                                              OrderStatus.processing
+                                                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                            }`}
+                                            data-ocid={`admin.orders.advance_button.${index + 1}`}
+                                          >
+                                            <ArrowRight className="h-3 w-3" />
+                                            Mark {nextStatusCfg.label}
+                                          </button>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
-              {/* ── WEBSITE SETTINGS ───────────────────────────────────── */}
+              {/* ── WEBSITE SETTINGS ────────────────────────────────── */}
               {activeSection === "content" && (
                 <div className="space-y-5">
                   <div>
@@ -1221,7 +1449,7 @@ export function AdminPage() {
                   </div>
 
                   <div
-                    className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 max-w-2xl"
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 max-w-2xl"
                     data-ocid="admin.content.panel"
                   >
                     <div className="space-y-6">
@@ -1229,7 +1457,7 @@ export function AdminPage() {
                       <div className="space-y-2">
                         <Label
                           htmlFor="content-homepage-title"
-                          className="text-sm font-semibold text-gray-700"
+                          className="text-sm font-bold text-gray-700"
                         >
                           Homepage Title
                         </Label>
@@ -1243,7 +1471,7 @@ export function AdminPage() {
                             }))
                           }
                           placeholder="Divine Devotion Delivered"
-                          className="h-12 text-base border-gray-200 focus:border-blue-400 focus:ring-blue-100"
+                          className="h-12 text-base border-gray-200 focus:border-indigo-400 rounded-xl"
                           data-ocid="admin.content.homepage_title.input"
                         />
                         <p className="text-xs text-gray-400">
@@ -1257,13 +1485,13 @@ export function AdminPage() {
                       {/* Banner Text */}
                       <div className="space-y-2">
                         <Label
-                          htmlFor="content-banner-text"
-                          className="text-sm font-semibold text-gray-700"
+                          htmlFor="content-banner"
+                          className="text-sm font-bold text-gray-700"
                         >
                           Banner Text
                         </Label>
-                        <Textarea
-                          id="content-banner-text"
+                        <Input
+                          id="content-banner"
                           value={siteContent.bannerText}
                           onChange={(e) =>
                             setSiteContent((prev) => ({
@@ -1271,14 +1499,12 @@ export function AdminPage() {
                               bannerText: e.target.value,
                             }))
                           }
-                          placeholder="Explore sacred ISKCON books and premium incense sticks..."
-                          rows={3}
-                          className="text-base resize-none border-gray-200 focus:border-blue-400 focus:ring-blue-100"
-                          data-ocid="admin.content.banner_text.textarea"
+                          placeholder="Free shipping on orders above ₹500"
+                          className="h-12 text-base border-gray-200 focus:border-indigo-400 rounded-xl"
+                          data-ocid="admin.content.banner.input"
                         />
                         <p className="text-xs text-gray-400">
-                          The subtitle shown below the main heading in the hero
-                          banner.
+                          Short promotional text shown in the site banner.
                         </p>
                       </div>
 
@@ -1287,13 +1513,13 @@ export function AdminPage() {
                       {/* About Section */}
                       <div className="space-y-2">
                         <Label
-                          htmlFor="content-about-section"
-                          className="text-sm font-semibold text-gray-700"
+                          htmlFor="content-about"
+                          className="text-sm font-bold text-gray-700"
                         >
                           About Section
                         </Label>
                         <Textarea
-                          id="content-about-section"
+                          id="content-about"
                           value={siteContent.aboutSection}
                           onChange={(e) =>
                             setSiteContent((prev) => ({
@@ -1301,14 +1527,12 @@ export function AdminPage() {
                               aboutSection: e.target.value,
                             }))
                           }
-                          placeholder="Spreading the teachings of Lord Krishna..."
-                          rows={4}
-                          className="text-base resize-none border-gray-200 focus:border-blue-400 focus:ring-blue-100"
-                          data-ocid="admin.content.about_section.textarea"
+                          placeholder="We bring the divine experience of ISKCON closer to you…"
+                          className="min-h-24 text-base border-gray-200 focus:border-indigo-400 rounded-xl resize-none"
+                          data-ocid="admin.content.about.textarea"
                         />
                         <p className="text-xs text-gray-400">
-                          Shown in the "About ISKCON" section in the website
-                          footer.
+                          About your store, shown on the homepage.
                         </p>
                       </div>
 
@@ -1317,13 +1541,13 @@ export function AdminPage() {
                       {/* Contact Info */}
                       <div className="space-y-2">
                         <Label
-                          htmlFor="content-contact-info"
-                          className="text-sm font-semibold text-gray-700"
+                          htmlFor="content-contact"
+                          className="text-sm font-bold text-gray-700"
                         >
                           Contact Info
                         </Label>
                         <Textarea
-                          id="content-contact-info"
+                          id="content-contact"
                           value={siteContent.contactInfo}
                           onChange={(e) =>
                             setSiteContent((prev) => ({
@@ -1331,13 +1555,12 @@ export function AdminPage() {
                               contactInfo: e.target.value,
                             }))
                           }
-                          placeholder="Phone: +91 XXXXXX XXXXXX"
-                          rows={4}
-                          className="text-base resize-none border-gray-200 focus:border-blue-400 focus:ring-blue-100"
-                          data-ocid="admin.content.contact_info.textarea"
+                          placeholder="Phone: +91 83910 20810 · Email: info@example.com"
+                          className="min-h-20 text-base border-gray-200 focus:border-indigo-400 rounded-xl resize-none"
+                          data-ocid="admin.content.contact.textarea"
                         />
                         <p className="text-xs text-gray-400">
-                          Shown in the "Contact" section in the website footer.
+                          Contact details shown in the footer or contact page.
                         </p>
                       </div>
 
@@ -1347,7 +1570,8 @@ export function AdminPage() {
                       <Button
                         onClick={handleSaveContent}
                         disabled={contentSaving}
-                        className="w-full h-12 text-base bg-green-600 hover:bg-green-700 text-white font-semibold shadow-sm"
+                        className="w-full h-12 text-base text-white font-semibold rounded-xl shadow-sm"
+                        style={{ backgroundColor: "oklch(27% 0.12 264)" }}
                         data-ocid="admin.content.save_button"
                       >
                         {contentSaving ? (
@@ -1355,7 +1579,7 @@ export function AdminPage() {
                         ) : (
                           <Save className="h-5 w-5 mr-2" />
                         )}
-                        {contentSaving ? "Saving..." : "Save Changes"}
+                        {contentSaving ? "Saving…" : "Save Changes"}
                       </Button>
                     </div>
                   </div>
@@ -1364,11 +1588,26 @@ export function AdminPage() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* ── FOOTER ─────────────────────────────────────────────────── */}
+        <footer className="py-4 px-6 border-t border-gray-200 bg-white">
+          <p className="text-xs text-gray-400 text-center">
+            © {new Date().getFullYear()}.{" "}
+            <a
+              href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+            >
+              Built with ❤️ using caffeine.ai
+            </a>
+          </p>
+        </footer>
       </div>
 
       {/* ── PRODUCT FORM DIALOG ──────────────────────────────────────────── */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg w-full max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader className="pb-2">
             <DialogTitle className="text-xl font-bold text-gray-900">
               {editingProduct ? "Edit Product" : "Add New Product"}
@@ -1376,9 +1615,9 @@ export function AdminPage() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            {/* ── UNIFIED DRAG & DROP IMAGE UPLOAD ZONE ── */}
+            {/* ── IMAGE UPLOAD ZONE ── */}
             <div>
-              <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+              <Label className="text-sm font-bold text-gray-700 mb-2 block">
                 Product Image
               </Label>
 
@@ -1394,8 +1633,10 @@ export function AdminPage() {
               {/* Drop zone */}
               {displayPreview ? (
                 <div
-                  className="relative rounded-xl overflow-hidden border-2 border-dashed transition-all duration-150 cursor-pointer group"
-                  style={{ borderColor: isDragging ? "#60a5fa" : "#e5e7eb" }}
+                  className="relative rounded-2xl overflow-hidden border-2 border-dashed transition-all duration-150 cursor-pointer group"
+                  style={{
+                    borderColor: isDragging ? "oklch(27% 0.12 264)" : "#e2e8f0",
+                  }}
                   onClick={() => imageInputRef.current?.click()}
                   onKeyDown={(e) =>
                     e.key === "Enter" && imageInputRef.current?.click()
@@ -1411,23 +1652,23 @@ export function AdminPage() {
                   <img
                     src={displayPreview}
                     alt="Product preview"
-                    className="w-full h-44 object-cover"
+                    className="w-full h-48 object-cover"
                   />
                   {/* Hover overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-150 flex items-center justify-center">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-white/90 rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-xs font-medium text-gray-700">
-                      <RefreshCw className="h-3.5 w-3.5" />
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-white/95 rounded-xl px-4 py-2 flex items-center gap-2 text-sm font-semibold text-gray-700 shadow-sm">
+                      <RefreshCw className="h-4 w-4" />
                       Change image
                     </div>
                   </div>
-                  {/* X button to clear */}
+                  {/* X button */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleClearImage();
                     }}
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors z-10"
+                    className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white rounded-full p-1.5 transition-colors z-10"
                     aria-label="Remove image"
                     data-ocid="admin.product.image.close_button"
                   >
@@ -1435,7 +1676,7 @@ export function AdminPage() {
                   </button>
                   {/* Success indicator */}
                   {uploadedImageUrl && !uploading && (
-                    <div className="absolute bottom-2 left-2 bg-green-600/90 text-white rounded-md px-2 py-1 flex items-center gap-1.5 text-xs font-medium">
+                    <div className="absolute bottom-3 left-3 bg-emerald-600/95 text-white rounded-lg px-3 py-1.5 flex items-center gap-1.5 text-xs font-semibold shadow">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Ready to save
                     </div>
@@ -1443,10 +1684,10 @@ export function AdminPage() {
                 </div>
               ) : (
                 <div
-                  className={`w-full flex flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed py-10 cursor-pointer transition-all duration-150 ${
+                  className={`w-full flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed py-10 cursor-pointer transition-all duration-150 ${
                     isDragging
-                      ? "border-blue-400 bg-blue-50"
-                      : "border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40"
+                      ? "border-indigo-400 bg-indigo-50"
+                      : "border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/40"
                   }`}
                   onClick={() => imageInputRef.current?.click()}
                   onKeyDown={(e) =>
@@ -1461,21 +1702,27 @@ export function AdminPage() {
                   data-ocid="admin.product.image.dropzone"
                 >
                   <div
-                    className={`rounded-full p-3 transition-all duration-150 ${isDragging ? "bg-blue-100" : "bg-gray-100"}`}
+                    className={`rounded-2xl p-4 transition-all duration-150 ${
+                      isDragging ? "bg-indigo-100" : "bg-gray-100"
+                    }`}
                   >
                     <UploadCloud
-                      className={`h-7 w-7 transition-colors duration-150 ${isDragging ? "text-blue-500" : "text-gray-400"}`}
+                      className={`h-8 w-8 transition-colors duration-150 ${
+                        isDragging ? "text-indigo-500" : "text-gray-400"
+                      }`}
                     />
                   </div>
                   <div className="text-center">
                     <p
-                      className={`text-sm font-medium transition-colors duration-150 ${isDragging ? "text-blue-600" : "text-gray-600"}`}
+                      className={`text-sm font-semibold transition-colors duration-150 ${
+                        isDragging ? "text-indigo-700" : "text-gray-600"
+                      }`}
                     >
                       {isDragging
                         ? "Drop to upload"
                         : "Drag & drop or click to upload"}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
+                    <p className="text-xs text-gray-400 mt-1">
                       JPG, PNG, WebP · max 2 MB
                     </p>
                   </div>
@@ -1485,22 +1732,25 @@ export function AdminPage() {
               {/* Progress bar */}
               {uploading && (
                 <div
-                  className="mt-2.5 space-y-1"
+                  className="mt-3 space-y-1.5"
                   data-ocid="admin.product.image.loading_state"
                 >
-                  <div className="flex justify-between text-xs text-gray-400">
+                  <div className="flex justify-between text-xs text-gray-400 font-medium">
                     <span>Uploading…</span>
                     <span>{uploadProgress}%</span>
                   </div>
-                  <Progress value={uploadProgress} className="h-1.5" />
+                  <Progress
+                    value={uploadProgress}
+                    className="h-2 rounded-full"
+                  />
                 </div>
               )}
 
               {/* URL fallback on failure */}
               {uploadFailed && (
-                <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                  <p className="text-xs text-amber-700 font-medium mb-2 flex items-center gap-1.5">
-                    <span>⚠</span> Upload failed — paste an image URL below:
+                <div className="mt-3 p-4 bg-amber-50 rounded-xl border border-amber-200">
+                  <p className="text-xs text-amber-700 font-semibold mb-2 flex items-center gap-1.5">
+                    <span>⚠</span> Upload failed — paste an image URL:
                   </p>
                   <Input
                     value={formData.imageUrl}
@@ -1508,7 +1758,7 @@ export function AdminPage() {
                       setFormData((p) => ({ ...p, imageUrl: e.target.value }))
                     }
                     placeholder="https://example.com/image.jpg"
-                    className="text-sm border-amber-300 focus:border-amber-500"
+                    className="h-11 text-sm border-amber-300 focus:border-amber-500 rounded-xl"
                     data-ocid="admin.product.image_url.input"
                   />
                 </div>
@@ -1516,74 +1766,134 @@ export function AdminPage() {
 
               {/* Optional URL input (non-failure) */}
               {!uploadFailed && !imageFile && (
-                <div className="mt-2.5">
+                <div className="mt-3">
                   <Input
                     value={formData.imageUrl}
                     onChange={(e) =>
                       setFormData((p) => ({ ...p, imageUrl: e.target.value }))
                     }
-                    placeholder="Or paste image URL (optional)"
-                    className="text-sm border-gray-200 text-gray-500 placeholder:text-gray-400"
+                    placeholder="Or paste image URL…"
+                    className="h-11 text-sm border-gray-200 focus:border-indigo-400 rounded-xl"
                     data-ocid="admin.product.image_url.input"
                   />
                 </div>
               )}
             </div>
 
-            <Separator className="my-1 bg-gray-100" />
+            <Separator className="bg-gray-100" />
 
-            {/* Name */}
-            <div>
-              <Label
-                htmlFor="p-name"
-                className="text-sm font-semibold text-gray-700 mb-1 block"
-              >
-                Product Name *
-              </Label>
-              <Input
-                id="p-name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, name: e.target.value }))
-                }
-                placeholder="Product name"
-                className="h-12 text-base border-gray-200"
-                data-ocid="admin.product.name.input"
-              />
-            </div>
-
-            {/* Price & Stock */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            {/* ── PRODUCT FIELDS ── */}
+            <div className="space-y-4">
+              {/* Name */}
+              <div className="space-y-1.5">
                 <Label
-                  htmlFor="p-price"
-                  className="text-sm font-semibold text-gray-700 mb-1 block"
+                  htmlFor="product-name"
+                  className="text-sm font-bold text-gray-700"
                 >
-                  Price (₹) *
+                  Product Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
-                  id="p-price"
-                  type="number"
-                  step="0.01"
-                  value={formData.priceCents}
+                  id="product-name"
+                  value={formData.name}
                   onChange={(e) =>
-                    setFormData((p) => ({ ...p, priceCents: e.target.value }))
+                    setFormData((p) => ({ ...p, name: e.target.value }))
                   }
-                  placeholder="0.00"
-                  className="h-12 text-base border-gray-200"
-                  data-ocid="admin.product.price.input"
+                  placeholder="e.g. Govinda Incense Sticks"
+                  className="h-12 text-base border-gray-200 focus:border-indigo-400 rounded-xl"
+                  data-ocid="admin.product.name.input"
                 />
               </div>
-              <div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
                 <Label
-                  htmlFor="p-stock"
-                  className="text-sm font-semibold text-gray-700 mb-1 block"
+                  htmlFor="product-desc"
+                  className="text-sm font-bold text-gray-700"
                 >
-                  Stock
+                  Description
+                </Label>
+                <Textarea
+                  id="product-desc"
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, description: e.target.value }))
+                  }
+                  placeholder="Describe the product…"
+                  className="min-h-20 text-base border-gray-200 focus:border-indigo-400 rounded-xl resize-none"
+                  data-ocid="admin.product.description.textarea"
+                />
+              </div>
+
+              {/* Price + Category row */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="product-price"
+                    className="text-sm font-bold text-gray-700"
+                  >
+                    Price (₹) <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="product-price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.priceCents}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, priceCents: e.target.value }))
+                    }
+                    placeholder="0.00"
+                    className="h-12 text-base border-gray-200 focus:border-indigo-400 rounded-xl"
+                    data-ocid="admin.product.price.input"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label
+                    htmlFor="product-category"
+                    className="text-sm font-bold text-gray-700"
+                  >
+                    Category
+                  </Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(val) =>
+                      setFormData((p) => ({
+                        ...p,
+                        category: val as ProductCategory,
+                      }))
+                    }
+                  >
+                    <SelectTrigger
+                      id="product-category"
+                      className="h-12 text-base border-gray-200 rounded-xl"
+                      data-ocid="admin.product.category.select"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value={ProductCategory.book}>
+                        Books
+                      </SelectItem>
+                      <SelectItem value={ProductCategory.incense}>
+                        Incense
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Stock */}
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="product-stock"
+                  className="text-sm font-bold text-gray-700"
+                >
+                  Stock Quantity
                 </Label>
                 <Input
-                  id="p-stock"
+                  id="product-stock"
                   type="number"
+                  min="0"
                   value={formData.stockQuantity}
                   onChange={(e) =>
                     setFormData((p) => ({
@@ -1591,138 +1901,117 @@ export function AdminPage() {
                       stockQuantity: e.target.value,
                     }))
                   }
-                  className="h-12 text-base border-gray-200"
+                  placeholder="100"
+                  className="h-12 text-base border-gray-200 focus:border-indigo-400 rounded-xl"
                   data-ocid="admin.product.stock.input"
                 />
               </div>
-            </div>
 
-            {/* Category */}
-            <div>
-              <Label
-                htmlFor="p-category"
-                className="text-sm font-semibold text-gray-700 mb-1 block"
-              >
-                Category
-              </Label>
-              <Select
-                value={formData.category}
-                onValueChange={(val) =>
-                  setFormData((p) => ({
-                    ...p,
-                    category: val as ProductCategory,
-                  }))
-                }
-              >
-                <SelectTrigger
-                  className="h-12 text-base border-gray-200"
-                  data-ocid="admin.product.category.select"
+              {/* Active toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
+                <div>
+                  <p className="text-sm font-bold text-gray-700">Active</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Show this product in the store
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={formData.isActive}
+                  onClick={() =>
+                    setFormData((p) => ({ ...p, isActive: !p.isActive }))
+                  }
+                  className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none ${
+                    formData.isActive ? "bg-indigo-600" : "bg-gray-300"
+                  }`}
+                  data-ocid="admin.product.active.switch"
                 >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ProductCategory.book}>Book</SelectItem>
-                  <SelectItem value={ProductCategory.incense}>
-                    Incense
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                  <span
+                    className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                      formData.isActive ? "left-6" : "left-0.5"
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Footer Buttons */}
-          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-2">
-            {editingProduct ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 h-12 sm:w-auto w-full"
-                  onClick={() => triggerDelete(editingProduct)}
-                  disabled={saving || uploading}
-                  data-ocid="admin.product.dialog.delete_button"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Product
-                </Button>
-
-                <Button
-                  onClick={handleSave}
-                  disabled={saving || uploading}
-                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
-                  data-ocid="admin.product.dialog.submit_button"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                  )}
-                  {saving ? "Saving…" : "Save Product"}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-gray-200 text-gray-600 hover:bg-gray-50 h-12 sm:flex-none w-full sm:w-auto"
-                  onClick={() => {
-                    setFormData(defaultForm);
-                    resetImageState();
-                    if (imageInputRef.current) imageInputRef.current.value = "";
-                  }}
-                  disabled={saving || uploading}
-                  data-ocid="admin.product.dialog.cancel_button"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Clear
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saving || uploading}
-                  className="flex-1 h-12 text-base bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
-                  data-ocid="admin.product.dialog.submit_button"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                  )}
-                  {saving ? "Saving…" : "Save Product"}
-                </Button>
-              </>
+          <DialogFooter className="pt-4 border-t border-gray-100 flex-col sm:flex-row gap-2">
+            {editingProduct && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 px-5 text-red-600 border-red-200 hover:bg-red-50 font-semibold rounded-xl sm:mr-auto"
+                onClick={() => triggerDelete(editingProduct)}
+                disabled={saving}
+                data-ocid="admin.product.delete_button"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Product
+              </Button>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-12 px-5 font-semibold rounded-xl border-gray-200"
+              onClick={() => {
+                setFormData(defaultForm);
+                resetImageState();
+              }}
+              disabled={saving}
+              data-ocid="admin.product.clear_button"
+            >
+              Clear
+            </Button>
+            <Button
+              type="button"
+              className="h-12 px-6 text-white font-semibold rounded-xl shadow-sm"
+              style={{ backgroundColor: "oklch(27% 0.12 264)" }}
+              onClick={handleSave}
+              disabled={saving || uploading}
+              data-ocid="admin.product.save_button"
+            >
+              {saving || uploading ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <ImagePlus className="h-4 w-4 mr-2" />
+              )}
+              {saving
+                ? "Saving…"
+                : uploading
+                  ? "Uploading…"
+                  : editingProduct
+                    ? "Update Product"
+                    : "Save Product"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AlertDialog
-        open={deleteAlertOpen}
-        onOpenChange={(open) => {
-          setDeleteAlertOpen(open);
-          if (!open) setProductToDelete(null);
-        }}
-      >
-        <AlertDialogContent data-ocid="admin.delete.dialog">
+
+      {/* ── DELETE CONFIRM DIALOG ──────────────────────────────────────── */}
+      <AlertDialog open={deleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+        <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete{" "}
-              <span className="font-semibold text-gray-900">
-                {productToDelete?.name}
-              </span>
-              ? This action cannot be undone.
+            <AlertDialogTitle className="text-lg font-bold text-gray-900">
+              Delete Product?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-500">
+              This will permanently delete{" "}
+              <strong className="text-gray-900">{productToDelete?.name}</strong>
+              . This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="gap-2">
             <AlertDialogCancel
-              className="border-gray-200"
+              className="h-11 rounded-xl font-semibold"
               data-ocid="admin.delete.cancel_button"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
+              className="h-11 rounded-xl bg-red-600 hover:bg-red-700 font-semibold"
               onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700 text-white"
               data-ocid="admin.delete.confirm_button"
             >
               Delete
