@@ -487,61 +487,52 @@ export class StorageClient {
       methodName: "_caffeineStorageCreateCertificate",
       arg: args,
     });
-    const respone = result.response.body;
-    // Try v3 response format first
-    if (isV3ResponseBody(respone)) {
-      console.log("[StorageClient] Certificate (v3):", respone.certificate);
-      return respone.certificate;
+    const body = result.response.body;
+    // Try v3 format first
+    if (isV3ResponseBody(body)) {
+      console.log("[StorageClient] Certificate (v3):", body.certificate);
+      return body.certificate;
     }
-    // Fallback: try v2/legacy format -- reply.arg contains Candid-encoded bytes
-    if (respone && typeof respone === "object" && "reply" in respone) {
-      const reply = (respone as any).reply;
-      if (reply && reply.arg instanceof Uint8Array && reply.arg.length > 0) {
-        try {
-          const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], reply.arg);
-          if (decoded.length > 0 && decoded[0] instanceof Uint8Array) {
-            console.log("[StorageClient] Certificate (v2 legacy)");
-            return decoded[0] as Uint8Array;
-          }
-        } catch {
-          // Candid decode failed -- fall through to next check
+    // Fall back to v2/legacy: decode reply.arg via Candid
+    if (body && (body as any).reply?.arg) {
+      try {
+        const decoded = IDL.decode(
+          [IDL.Vec(IDL.Nat8)],
+          (body as any).reply.arg,
+        );
+        if (decoded?.[0]) {
+          console.log("[StorageClient] Certificate (v2 fallback).");
+          return new Uint8Array(decoded[0] as number[]);
         }
+      } catch (e) {
+        console.warn("[StorageClient] v2 Candid decode failed:", e);
       }
     }
-    // Last resort: check if body itself has a certificate array
-    if (respone && typeof respone === "object" && "certificate" in respone) {
-      const cert = (respone as any).certificate;
-      if (cert instanceof Uint8Array) {
-        console.log("[StorageClient] Certificate (body.certificate)");
-        return cert;
-      }
+    // Last resort: check for certificate array directly on the body
+    if (body && (body as any).certificate) {
+      return (body as any).certificate;
     }
-    console.error("[StorageClient] Unrecognised response body:", respone);
     throw new Error(
-      "StorageClient: Could not extract certificate from backend response. " +
-        "Response format not recognised (tried v3, v2/legacy, and body.certificate).",
+      `[StorageClient] getCertificate: could not extract certificate from response body. Neither v3 nor v2 format matched. Body: ${JSON.stringify(body)}`,
     );
   }
 
   public async putFile(
     blobBytes: Uint8Array,
-    contentType?: string,
+    contentType = "application/octet-stream",
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
-    const mimeType = contentType || "application/octet-stream";
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes using the correct MIME type
+    // Create a Blob from the bytes
     const file = new Blob([new Uint8Array(blobBytes)], {
-      type: mimeType,
+      type: contentType,
     });
     // File metadata headers that will be stored with the blob tree
-    // Using the correct MIME type ensures the storage gateway serves the file
-    // with the right Content-Type header (e.g. image/webp instead of octet-stream)
     const fileHeaders: Headers = {
-      "Content-Type": mimeType,
+      "Content-Type": contentType,
       "Content-Length": file.size.toString(),
     };
 
