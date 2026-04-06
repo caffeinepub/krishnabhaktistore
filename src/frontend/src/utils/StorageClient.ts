@@ -488,51 +488,80 @@ export class StorageClient {
       arg: args,
     });
     const body = result.response.body;
-    // Try v3 format first
+
+    // Try v3 response format first
     if (isV3ResponseBody(body)) {
-      console.log("[StorageClient] Certificate (v3):", body.certificate);
+      console.log("[StorageClient] getCertificate: v3 format");
       return body.certificate;
     }
-    // Fall back to v2/legacy: decode reply.arg via Candid
+
+    // Try v2/legacy: decode reply.arg via Candid
     if (body && (body as any).reply?.arg) {
       try {
         const decoded = IDL.decode(
           [IDL.Vec(IDL.Nat8)],
           (body as any).reply.arg,
         );
-        if (decoded?.[0]) {
-          console.log("[StorageClient] Certificate (v2 fallback).");
-          return new Uint8Array(decoded[0] as number[]);
+        if (decoded.length > 0) {
+          const certBytes = new Uint8Array(decoded[0] as number[]);
+          console.log(
+            "[StorageClient] getCertificate: v2/legacy format, bytes:",
+            certBytes.byteLength,
+          );
+          return certBytes;
         }
       } catch (e) {
-        console.warn("[StorageClient] v2 Candid decode failed:", e);
+        console.warn("[StorageClient] getCertificate: v2 decode failed:", e);
       }
     }
-    // Last resort: check for certificate array directly on the body
-    if (body && (body as any).certificate) {
+
+    // Last resort: direct certificate bytes on body
+    if (body && (body as any).certificate instanceof Uint8Array) {
+      console.log("[StorageClient] getCertificate: direct certificate field");
       return (body as any).certificate;
     }
+
+    // If the response has any Uint8Array-like field, use it
+    if (body && (body as any).certificate) {
+      try {
+        const cert = new Uint8Array((body as any).certificate);
+        if (cert.byteLength > 0) {
+          console.log(
+            "[StorageClient] getCertificate: coerced certificate field",
+          );
+          return cert;
+        }
+      } catch (_) {
+        /* ignore */
+      }
+    }
+
+    console.error(
+      "[StorageClient] getCertificate: unrecognised response body:",
+      body,
+    );
     throw new Error(
-      `[StorageClient] getCertificate: could not extract certificate from response body. Neither v3 nor v2 format matched. Body: ${JSON.stringify(body)}`,
+      `getCertificate: unrecognised response format from backend. Got: ${JSON.stringify(body).slice(0, 200)}`,
     );
   }
 
   public async putFile(
     blobBytes: Uint8Array,
-    contentType = "application/octet-stream",
+    contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
+    const mimeType = contentType || "application/octet-stream";
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes
+    // Create a Blob from the bytes with the correct MIME type
     const file = new Blob([new Uint8Array(blobBytes)], {
-      type: contentType,
+      type: mimeType,
     });
     // File metadata headers that will be stored with the blob tree
     const fileHeaders: Headers = {
-      "Content-Type": contentType,
+      "Content-Type": mimeType,
       "Content-Length": file.size.toString(),
     };
 

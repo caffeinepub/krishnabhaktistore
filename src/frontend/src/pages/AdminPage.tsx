@@ -347,11 +347,13 @@ export function AdminPage() {
         setUploadProgress(pct),
       );
       setUploadedImageUrl(url);
-      setUploading(false);
     } catch (err) {
-      setUploading(false);
       setUploadFailed(true);
+      const msg = err instanceof Error ? err.message : "Upload failed";
       console.error("[AutoUpload] failed:", err);
+      toast.error(`Image upload failed: ${msg}. You can paste a URL instead.`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -427,7 +429,7 @@ export function AdminPage() {
           toast.error(
             "Please log in with Internet Identity before uploading an image.",
           );
-          setSaving(false);
+          // setSaving is cleared by the outer finally block
           return;
         }
         setUploading(true);
@@ -438,13 +440,16 @@ export function AdminPage() {
           setUploadedImageUrl(finalImageUrl);
         } catch (uploadErr) {
           console.error("[AdminPage] Image upload error:", uploadErr);
+          const uploadMsg =
+            uploadErr instanceof Error ? uploadErr.message : "Upload failed";
           toast.error(
-            "Image upload failed. Saving product without image — paste a URL below if needed.",
+            `Image upload failed (${uploadMsg}). Saving product without image — paste a URL below if needed.`,
           );
           setUploadFailed(true);
           setImageFile(null);
           finalImageUrl = formData.imageUrl;
         } finally {
+          // Always unblock the upload spinner regardless of outcome
           setUploading(false);
         }
       }

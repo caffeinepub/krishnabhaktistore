@@ -2,31 +2,43 @@ import { HttpAgent, type Identity } from "@icp-sdk/core/agent";
 import { loadConfig } from "../config";
 import { StorageClient } from "./StorageClient";
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2 MB
-const COMPRESS_MAX_DIMENSION = 1600;
-const COMPRESS_QUALITY = 0.82;
+// Accept any image/* type so mobile camera uploads (HEIC, etc.) are not rejected
+const ALLOWED_TYPE_PREFIX = "image/";
+// Hard cap BEFORE compression — 20 MB. After compression we target ≤1 MB.
+const MAX_RAW_SIZE_BYTES = 20 * 1024 * 1024;
+// Target output size — 1 MB
+const TARGET_SIZE_BYTES = 1 * 1024 * 1024;
+const COMPRESS_MAX_DIMENSION = 1200;
 const OUTPUT_MIME = "image/webp";
 
+// Validate only the file type (not size — raw mobile photos can be large).
 export function validateImageFile(file: File): void {
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error("Only JPG, PNG, and WebP images are allowed.");
-  }
-  if (file.size > MAX_SIZE_BYTES) {
+  // Accept any image/* MIME type (handles HEIC, HEIF, JPEG, PNG, WEBP, etc.)
+  if (!file.type.startsWith(ALLOWED_TYPE_PREFIX) && file.type !== "") {
     throw new Error(
-      `Image must be smaller than 2 MB (current: ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+      "Only image files are allowed (JPG, PNG, WebP, HEIC, etc.).",
+    );
+  }
+  if (file.size > MAX_RAW_SIZE_BYTES) {
+    throw new Error(
+      `Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum allowed is 20 MB.`,
     );
   }
 }
 
+/**
+ * Compress an image to WebP, targeting ≤ TARGET_SIZE_BYTES.
+ * It tries decreasing quality levels until the output is small enough.
+ */
 async function compressImage(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
 
-    img.onload = () => {
+    img.onload = async () => {
       URL.revokeObjectURL(objectUrl);
 
+      // Scale down to max dimension
       let { width, height } = img;
       if (width > COMPRESS_MAX_DIMENSION || height > COMPRESS_MAX_DIMENSION) {
         if (width >= height) {
@@ -47,20 +59,36 @@ async function compressImage(file: File): Promise<Blob> {
         reject(new Error("Failed to get canvas 2D context"));
         return;
       }
-
       ctx.drawImage(img, 0, 0, width, height);
 
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error("Canvas compression produced an empty blob"));
-            return;
-          }
+      // Try progressively lower quality until we're under the target size
+      const qualities = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
+      for (const quality of qualities) {
+        const blob = await new Promise<Blob | null>((res) =>
+          canvas.toBlob(res, OUTPUT_MIME, quality),
+        );
+        if (!blob) {
+          reject(new Error("Canvas compression produced an empty blob"));
+          return;
+        }
+        console.log(
+          `[ImageUpload] Compressed at quality ${quality}: ${(blob.size / 1024).toFixed(1)} KB`,
+        );
+        if (blob.size <= TARGET_SIZE_BYTES) {
           resolve(blob);
-        },
-        OUTPUT_MIME,
-        COMPRESS_QUALITY,
-      );
+          return;
+        }
+        // If even the lowest quality is still too big, use it anyway
+        if (quality === qualities[qualities.length - 1]) {
+          console.warn(
+            `[ImageUpload] Could not compress below 1 MB; using smallest result: ${(blob.size / 1024).toFixed(1)} KB`,
+          );
+          resolve(blob);
+          return;
+        }
+      }
+
+      reject(new Error("Compression loop ended unexpectedly"));
     };
 
     img.onerror = () => {
@@ -77,7 +105,7 @@ export async function uploadImageFile(
   identity: Identity,
   onProgress?: (percentage: number) => void,
 ): Promise<string> {
-  // Step 1: Validate file type and size
+  // Step 1: Validate type (not size — compression handles size)
   validateImageFile(file);
 
   if (identity.getPrincipal().isAnonymous()) {
@@ -93,12 +121,12 @@ export async function uploadImageFile(
     `${(file.size / 1024).toFixed(1)} KB`,
   );
 
-  // Step 2: Compress to WebP
+  // Step 2: Compress to WebP targeting ≤ 1 MB
   console.log("[ImageUpload] Compressing...");
   const compressedBlob = await compressImage(file);
   const compressedBytes = new Uint8Array(await compressedBlob.arrayBuffer());
   console.log(
-    `[ImageUpload] Compressed: ${(compressedBytes.byteLength / 1024).toFixed(1)} KB (${OUTPUT_MIME})`,
+    `[ImageUpload] Final compressed size: ${(compressedBytes.byteLength / 1024).toFixed(1)} KB (${OUTPUT_MIME})`,
   );
 
   // Step 3: Load config
@@ -119,7 +147,7 @@ export async function uploadImageFile(
     await agent.fetchRootKey().catch(console.error);
   }
 
-  // Step 5: Create StorageClient (5 constructor args)
+  // Step 5: Create StorageClient
   const storageClient = new StorageClient(
     config.bucket_name,
     config.storage_gateway_url,
@@ -134,20 +162,17 @@ export async function uploadImageFile(
   try {
     const result = await storageClient.putFile(
       compressedBytes,
-      OUTPUT_MIME, // contentType — 2nd arg, keeps the MIME type flowing through
-      onProgress, // progress callback — 3rd arg
+      OUTPUT_MIME,
+      onProgress,
     );
     hash = result.hash;
     console.log("[ImageUpload] putFile succeeded. Hash:", hash);
   } catch (err) {
     console.error("[ImageUpload] putFile failed:", err);
-    if (err instanceof Error) {
-      console.error("[ImageUpload] Error message:", err.message);
-    }
     throw err;
   }
 
-  // Step 7: Get the direct URL for the uploaded file
+  // Step 7: Get the direct URL
   const url = await storageClient.getDirectURL(hash);
   console.log("[ImageUpload] Upload complete. URL:", url);
   return url;
