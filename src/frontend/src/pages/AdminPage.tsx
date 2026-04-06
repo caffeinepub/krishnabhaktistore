@@ -272,10 +272,12 @@ export function AdminPage() {
               setLoading(false);
             })
             .catch(() => setLoading(false));
-          (actor as any)
-            .getSiteContent()
-            .then((c: SiteContent) => setSiteContent(c))
-            .catch(() => {});
+          const cached = localStorage.getItem("siteContent");
+          if (cached) {
+            try {
+              setSiteContent(JSON.parse(cached));
+            } catch {}
+          }
         } else {
           setLoading(false);
         }
@@ -457,10 +459,8 @@ export function AdminPage() {
   };
 
   const handleSaveContent = async () => {
-    if (!actor) return;
     setContentSaving(true);
     try {
-      await (actor as any).updateSiteContent(siteContent);
       localStorage.setItem("siteContent", JSON.stringify(siteContent));
       toast.success("Changes saved successfully!");
     } catch {

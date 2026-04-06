@@ -55,10 +55,6 @@ export function HomePage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-    (actor as any)
-      .getSiteContent()
-      .then((c: SiteContent) => setSiteContent(c))
-      .catch(() => {});
   }, [actor]);
 
   const heroTitle = siteContent?.homepageTitle || DEFAULT_TITLE;
