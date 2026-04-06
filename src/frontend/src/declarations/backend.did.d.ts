@@ -21,6 +21,7 @@ export interface Order {
   'customerId' : Principal,
   'items' : Array<OrderItem>,
   'customerEmail' : string,
+  'upiTransactionId' : string,
 }
 export interface OrderItem {
   'productId' : bigint,

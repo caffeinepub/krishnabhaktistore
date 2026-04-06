@@ -31,6 +31,7 @@ export function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
+  const [upiTxnId, setUpiTxnId] = useState("");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -75,7 +76,10 @@ export function CheckoutPage() {
     }
   };
 
-  const placeOrderWithStatus = async (status: OrderStatus) => {
+  const placeOrderWithStatus = async (
+    status: OrderStatus,
+    upiTransactionId = "",
+  ) => {
     if (!actor || items.length === 0) return;
     setLoading(true);
     try {
@@ -84,7 +88,7 @@ export function CheckoutPage() {
           ? identity.getPrincipal()
           : Principal.anonymous();
 
-      const order: Order = {
+      const order = {
         id: 0n,
         customerName: form.name,
         customerEmail: form.email,
@@ -99,7 +103,8 @@ export function CheckoutPage() {
         totalAmount: totalCents,
         status,
         createdAt: 0n,
-      };
+        upiTransactionId: upiTransactionId,
+      } satisfies Order;
 
       await actor.placeOrder(order);
       sendWhatsAppSilently(buildWhatsAppDetails());
@@ -124,7 +129,11 @@ export function CheckoutPage() {
       toast.error("Please fill in your Name, Phone, and Address.");
       return;
     }
-    await placeOrderWithStatus(OrderStatus.processing);
+    if (!upiTxnId.trim()) {
+      toast.error("Please enter your UPI Transaction ID.");
+      return;
+    }
+    await placeOrderWithStatus(OrderStatus.pending, upiTxnId.trim());
   };
 
   const handleOrderOnWhatsApp = () => {
@@ -145,12 +154,12 @@ export function CheckoutPage() {
         <div className="text-5xl mb-6">\uD83D\uDE4F</div>
         <h2 className="font-display text-2xl font-bold text-primary mb-3">
           {paymentMethod === "upi"
-            ? "Payment Received!"
+            ? "Payment Pending Verification"
             : "Order Placed Successfully!"}
         </h2>
         <p className="text-muted-foreground text-lg mb-8">
           {paymentMethod === "upi"
-            ? "Your order is marked as Paid. We will contact you soon."
+            ? "Your UPI payment is being verified. We will confirm your order shortly."
             : "We will contact you soon."}
         </p>
         <Button
@@ -328,6 +337,22 @@ export function CheckoutPage() {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   (PhonePe, GPay, Paytm, or any UPI app)
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="upiTxnId">UPI Transaction ID *</Label>
+                <Input
+                  id="upiTxnId"
+                  value={upiTxnId}
+                  onChange={(e) => setUpiTxnId(e.target.value)}
+                  placeholder="Enter your UPI Transaction ID"
+                  className="mt-1"
+                  required
+                  data-ocid="checkout.upi_txn_id.input"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter the transaction ID from your UPI payment confirmation.
                 </p>
               </div>
 

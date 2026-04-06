@@ -18,6 +18,7 @@ export interface Order {
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
+    upiTransactionId: string;
 }
 export type Time = bigint;
 export interface OrderItem {

@@ -100,6 +100,7 @@ export interface Order {
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
+    upiTransactionId: string;
 }
 export type Time = bigint;
 export interface OrderItem {
@@ -448,6 +449,7 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
     customerId: Principal;
     items: Array<_OrderItem>;
     customerEmail: string;
+    upiTransactionId?: string;
 }): {
     id: bigint;
     customerName: string;
@@ -459,6 +461,7 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
+    upiTransactionId: string;
 } {
     return {
         id: value.id,
@@ -470,7 +473,8 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
         shippingAddress: value.shippingAddress,
         customerId: value.customerId,
         items: value.items,
-        customerEmail: value.customerEmail
+        customerEmail: value.customerEmail,
+        upiTransactionId: (value as any).upiTransactionId ?? ''
     };
 }
 function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -594,6 +598,7 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
+    upiTransactionId: string;
 }): {
     id: bigint;
     customerName: string;
@@ -605,6 +610,7 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     customerId: Principal;
     items: Array<_OrderItem>;
     customerEmail: string;
+    upiTransactionId: string;
 } {
     return {
         id: value.id,
@@ -616,7 +622,8 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         shippingAddress: value.shippingAddress,
         customerId: value.customerId,
         items: value.items,
-        customerEmail: value.customerEmail
+        customerEmail: value.customerEmail,
+        upiTransactionId: value.upiTransactionId ?? ''
     };
 }
 function to_candid_variant_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {

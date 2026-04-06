@@ -50,7 +50,11 @@ actor {
     #cancelled;
   };
 
-  type Order = {
+  // V1 Order type -- matches the previously deployed stable schema (no upiTransactionId).
+  // Keep this type and the `orders` stable variable typed as OrderV1 so the
+  // canister upgrade is compatible. New orders are written here as well (with
+  // upiTransactionId stored separately in ordersUpiTxn).
+  type OrderV1 = {
     id : Nat;
     customerName : Text;
     customerEmail : Text;
@@ -63,7 +67,49 @@ actor {
     customerId : Principal;
   };
 
-  func compare(order1 : Order, order2 : Order) : Order.Order {
+  // Current full Order type (with upiTransactionId).
+  type Order = {
+    id : Nat;
+    customerName : Text;
+    customerEmail : Text;
+    customerPhone : Text;
+    shippingAddress : Text;
+    items : [OrderItem];
+    totalAmount : Nat;
+    status : OrderStatus;
+    createdAt : Time.Time;
+    customerId : Principal;
+    upiTransactionId : Text;
+  };
+
+  func orderFromV1(v1 : OrderV1, upiTxnId : Text) : Order = {
+    id = v1.id;
+    customerName = v1.customerName;
+    customerEmail = v1.customerEmail;
+    customerPhone = v1.customerPhone;
+    shippingAddress = v1.shippingAddress;
+    items = v1.items;
+    totalAmount = v1.totalAmount;
+    status = v1.status;
+    createdAt = v1.createdAt;
+    customerId = v1.customerId;
+    upiTransactionId = upiTxnId;
+  };
+
+  func orderToV1(o : Order) : OrderV1 = {
+    id = o.id;
+    customerName = o.customerName;
+    customerEmail = o.customerEmail;
+    customerPhone = o.customerPhone;
+    shippingAddress = o.shippingAddress;
+    items = o.items;
+    totalAmount = o.totalAmount;
+    status = o.status;
+    createdAt = o.createdAt;
+    customerId = o.customerId;
+  };
+
+  func compareOrders(order1 : Order, order2 : Order) : Order.Order {
     Nat.compare(order1.id, order2.id);
   };
 
@@ -92,7 +138,10 @@ actor {
   var nextOrderId = 1;
 
   let products = Map.empty<Nat, Product>();
-  let orders = Map.empty<Nat, Order>();
+  // Stable orders map keeps the V1 schema for upgrade compatibility.
+  let orders = Map.empty<Nat, OrderV1>();
+  // Supplemental stable map: orderId -> upiTransactionId (empty string = COD).
+  let ordersUpiTxn = Map.empty<Nat, Text>();
   let userProfiles = Map.empty<Principal, UserProfile>();
   // Phone number registry: token -> phone number
   let phoneRegistry = Map.empty<Text, Text>();
@@ -121,6 +170,20 @@ actor {
   let ownerPrincipal = Principal.fromText("6yb43-vmf7k-bflbc-pu74g-uhytl-4ha37-gz7m3-imf7y-ovax2-7r4rr-eae");
   accessControlState.userRoles.add(ownerPrincipal, #admin);
   accessControlState.adminAssigned := true;
+
+  // Helper: look up a full Order (merging V1 + upiTxn supplement)
+  func getFullOrder(id : Nat) : ?Order {
+    switch (orders.get(id)) {
+      case (null) { null };
+      case (?v1) {
+        let txnId = switch (ordersUpiTxn.get(id)) {
+          case (null) { "" };
+          case (?t) { t };
+        };
+        ?orderFromV1(v1, txnId);
+      };
+    };
+  };
 
   // Transform function for HTTP outcalls
   public query func transform(input : HttpOutcall.TransformationInput) : async HttpOutcall.TransformationOutput {
@@ -171,7 +234,7 @@ actor {
     };
   };
 
-  // ── SITE CONTENT ─────────────────────────────────────────────────────────────
+  // -- SITE CONTENT -------------------------------------------------------------
 
   // Get site content - public
   public query func getSiteContent() : async SiteContent {
@@ -186,7 +249,7 @@ actor {
     siteContent := content;
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
 
   // Sample Products
   let sampleProducts : [Product] = [
@@ -430,16 +493,24 @@ actor {
       };
     };
 
-    let newOrder : Order = {
-      order with
+    let newOrderV1 : OrderV1 = {
       id = nextOrderId;
+      customerName = order.customerName;
+      customerEmail = order.customerEmail;
+      customerPhone = order.customerPhone;
+      shippingAddress = order.shippingAddress;
       items = validatedItems.toArray();
       totalAmount;
       status = #pending;
       createdAt = Time.now();
       customerId = caller;
     };
-    orders.add(nextOrderId, newOrder);
+    orders.add(nextOrderId, newOrderV1);
+
+    // Store UPI transaction ID separately
+    if (order.upiTransactionId != "") {
+      ordersUpiTxn.add(nextOrderId, order.upiTransactionId);
+    };
 
     for (item in validatedItems.toArray().values()) {
       switch (products.get(item.productId)) {
@@ -455,7 +526,7 @@ actor {
     };
 
     nextOrderId += 1;
-    newOrder.id;
+    newOrderV1.id;
   };
 
   // ADMIN - Get All Orders
@@ -463,12 +534,20 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Runtime.trap("Unauthorized: Only admins can get all orders");
     };
-    orders.values().toArray().sort();
+    let result = List.empty<Order>();
+    for ((id, v1) in orders.entries()) {
+      let txnId = switch (ordersUpiTxn.get(id)) {
+        case (null) { "" };
+        case (?t) { t };
+      };
+      result.add(orderFromV1(v1, txnId));
+    };
+    result.toArray().sort(compareOrders);
   };
 
   // Get Order by ID
   public query ({ caller }) func getOrder(id : Nat) : async Order {
-    switch (orders.get(id)) {
+    switch (getFullOrder(id)) {
       case (null) { Runtime.trap("Order does not exist") };
       case (?order) {
         if (caller != order.customerId and not AccessControl.isAdmin(accessControlState, caller)) {
@@ -486,7 +565,7 @@ actor {
     };
     let updatedOrder = switch (orders.get(id)) {
       case (null) { Runtime.trap("Order does not exist") };
-      case (?order) { { order with status } };
+      case (?v1) { { v1 with status } };
     };
     orders.add(id, updatedOrder);
   };

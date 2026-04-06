@@ -112,8 +112,8 @@ function getStatusConfig(status: OrderStatus): StatusConfig {
       };
     case OrderStatus.processing:
       return {
-        label: "Confirmed",
-        classes: "bg-blue-100 text-blue-700 border border-blue-300",
+        label: "Paid",
+        classes: "bg-green-100 text-green-700 border border-green-300",
       };
     case OrderStatus.shipped:
       return {
@@ -1025,6 +1025,9 @@ export function AdminPage() {
                                 Total Price
                               </TableHead>
                               <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
+                                Transaction ID
+                              </TableHead>
+                              <TableHead className="text-gray-500 text-xs uppercase tracking-wider font-medium whitespace-nowrap">
                                 Status
                               </TableHead>
                             </TableRow>
@@ -1099,6 +1102,38 @@ export function AdminPage() {
                                         Number(order.totalAmount) / 100
                                       ).toFixed(2)}
                                     </span>
+                                  </TableCell>
+
+                                  <TableCell>
+                                    <div className="flex flex-col gap-1.5">
+                                      {order.upiTransactionId ? (
+                                        <>
+                                          <span className="text-xs font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded break-all">
+                                            {order.upiTransactionId}
+                                          </span>
+                                          {order.status ===
+                                            OrderStatus.pending && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleStatusChange(
+                                                  order.id,
+                                                  OrderStatus.processing,
+                                                )
+                                              }
+                                              className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold bg-green-600 hover:bg-green-700 text-white transition-colors whitespace-nowrap"
+                                              data-ocid={`admin.orders.verify_payment.${index + 1}`}
+                                            >
+                                              ✓ Verify Payment
+                                            </button>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">
+                                          —
+                                        </span>
+                                      )}
+                                    </div>
                                   </TableCell>
 
                                   <TableCell>

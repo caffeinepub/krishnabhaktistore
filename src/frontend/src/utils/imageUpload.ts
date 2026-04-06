@@ -127,11 +127,7 @@ export async function uploadImageFile(
   let hash: string;
   try {
     // putFile signature: putFile(blobBytes, contentType?, onProgress?)
-    const result = await storageClient.putFile(
-      compressedBytes,
-      OUTPUT_MIME,
-      onProgress,
-    );
+    const result = await storageClient.putFile(compressedBytes, onProgress);
     hash = result.hash;
     console.log("[ImageUpload] putFile succeeded. Hash:", hash);
   } catch (err) {
