@@ -12,10 +12,11 @@ export function useActor() {
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
     queryFn: async () => {
-      const isAuthenticated = !!identity;
+      const isAuthenticated =
+        !!identity && !identity.getPrincipal().isAnonymous();
 
       if (!isAuthenticated) {
-        // Return anonymous actor if not authenticated
+        // Return anonymous actor -- no _initializeAccessControlWithSecret needed
         return await createActorWithConfig();
       }
 
@@ -27,16 +28,16 @@ export function useActor() {
 
       const actor = await createActorWithConfig(actorOptions);
 
-      // Only attempt admin token init if a token is present.
-      // Wrap in try-catch so regular customers (phone login) are not blocked
-      // if the token is empty or the call is rejected for non-admin principals.
-      const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      if (adminToken) {
-        try {
-          await actor._initializeAccessControlWithSecret(adminToken);
-        } catch {
-          // Not an admin or token invalid – continue as regular user
-        }
+      // Only call _initializeAccessControlWithSecret for Internet Identity users
+      try {
+        const adminToken = getSecretParameter("caffeineAdminToken") || "";
+        await actor._initializeAccessControlWithSecret(adminToken);
+      } catch (err) {
+        // Non-fatal: if this fails the actor is still usable for public endpoints
+        console.warn(
+          "[useActor] _initializeAccessControlWithSecret failed:",
+          err,
+        );
       }
 
       return actor;

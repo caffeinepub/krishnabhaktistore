@@ -487,12 +487,44 @@ export class StorageClient {
       methodName: "_caffeineStorageCreateCertificate",
       arg: args,
     });
-    const respone = result.response.body;
-    if (isV3ResponseBody(respone)) {
-      console.log("Certificate:", respone.certificate);
-      return respone.certificate;
+    const body = result.response.body;
+
+    // Handle v3 response format (preferred)
+    if (isV3ResponseBody(body)) {
+      console.log("[StorageClient] getCertificate: v3 response");
+      return body.certificate;
     }
-    throw new Error("Expected v3 response body");
+
+    // Handle v2/legacy response format: decode reply.arg via Candid
+    if (body && typeof body === "object" && "reply" in body) {
+      const reply = (body as any).reply;
+      if (reply && reply.arg instanceof Uint8Array) {
+        console.log(
+          "[StorageClient] getCertificate: v2 response, decoding Candid",
+        );
+        try {
+          const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], reply.arg);
+          if (decoded.length > 0) {
+            return new Uint8Array(decoded[0] as number[]);
+          }
+        } catch (decodeErr) {
+          console.warn(
+            "[StorageClient] getCertificate: Candid decode failed:",
+            decodeErr,
+          );
+        }
+        // Fallback: return raw arg bytes
+        return reply.arg;
+      }
+    }
+
+    console.error(
+      "[StorageClient] getCertificate: unexpected response format:",
+      body,
+    );
+    throw new Error(
+      "getCertificate: Unexpected response format from canister. Neither v3 nor v2 format detected.",
+    );
   }
 
   public async putFile(
