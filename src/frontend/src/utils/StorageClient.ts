@@ -488,28 +488,52 @@ export class StorageClient {
       arg: args,
     });
     const respone = result.response.body;
+    // Handle v3 response format (preferred)
     if (isV3ResponseBody(respone)) {
-      console.log("Certificate:", respone.certificate);
+      console.log("[StorageClient] v3 certificate received");
       return respone.certificate;
     }
-    throw new Error("Expected v3 response body");
+    // Handle v2/legacy response format: decode reply.arg bytes via Candid
+    if (respone && (respone as any).reply?.arg) {
+      try {
+        const decoded = IDL.decode(
+          [IDL.Vec(IDL.Nat8)],
+          (respone as any).reply.arg,
+        );
+        if (decoded?.[0]) {
+          const certBytes = new Uint8Array(decoded[0] as number[]);
+          console.log(
+            "[StorageClient] v2 certificate decoded, length:",
+            certBytes.length,
+          );
+          return certBytes;
+        }
+      } catch (decodeErr) {
+        console.warn("[StorageClient] v2 reply decode failed:", decodeErr);
+      }
+    }
+    throw new Error(
+      `[StorageClient] Cannot extract certificate: unsupported response format. Body: ${JSON.stringify(respone)}`,
+    );
   }
 
   public async putFile(
     blobBytes: Uint8Array,
+    contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
+    const mimeType = contentType || "application/octet-stream";
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-    // Create a Blob from the bytes
+    // Create a Blob from the bytes with the correct MIME type
     const file = new Blob([new Uint8Array(blobBytes)], {
-      type: "application/octet-stream",
+      type: mimeType,
     });
-    // File metadata headers that will be stored with the blob tree
+    // File metadata headers that will be stored with the blob tree (served by gateway)
     const fileHeaders: Headers = {
-      "Content-Type": "application/octet-stream",
+      "Content-Type": mimeType,
       "Content-Length": file.size.toString(),
     };
 
