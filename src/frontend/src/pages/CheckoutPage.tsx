@@ -21,6 +21,8 @@ import {
   openAdminWhatsAppNotification,
 } from "../utils/whatsapp";
 
+type PaymentMethod = "cod" | "upi";
+
 export function CheckoutPage() {
   const { actor } = useActor();
   const { items, totalCents, clearCart } = useCart();
@@ -28,6 +30,7 @@ export function CheckoutPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cod");
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -56,11 +59,9 @@ export function CheckoutPage() {
   });
 
   const sendWhatsAppSilently = (details: WhatsAppOrderDetails) => {
-    // Send WhatsApp notification to admin in background without redirecting the customer
     const message = buildAdminOrderMessage(details);
     const encoded = encodeURIComponent(message);
     const url = `https://wa.me/${ADMIN_WHATSAPP_NUMBER}?text=${encoded}`;
-    // Use an invisible iframe so the browser does not navigate away
     try {
       const iframe = document.createElement("iframe");
       iframe.style.display = "none";
@@ -70,14 +71,12 @@ export function CheckoutPage() {
         if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
       }, 5000);
     } catch {
-      // Silently ignore — notification is best-effort
+      // Silently ignore
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const placeOrderWithStatus = async (status: OrderStatus) => {
     if (!actor || items.length === 0) return;
-
     setLoading(true);
     try {
       const customerId =
@@ -98,15 +97,12 @@ export function CheckoutPage() {
           priceAtOrder: i.priceCents,
         })),
         totalAmount: totalCents,
-        status: OrderStatus.pending,
+        status,
         createdAt: 0n,
       };
 
       await actor.placeOrder(order);
-
-      // Send WhatsApp notification to admin silently in background
       sendWhatsAppSilently(buildWhatsAppDetails());
-
       clearCart();
       setOrderPlaced(true);
     } catch (err) {
@@ -117,11 +113,23 @@ export function CheckoutPage() {
     }
   };
 
+  const handleCODSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await placeOrderWithStatus(OrderStatus.pending);
+  };
+
+  const handleUPIPaid = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
+      toast.error("Please fill in your Name, Phone, and Address.");
+      return;
+    }
+    await placeOrderWithStatus(OrderStatus.processing);
+  };
+
   const handleOrderOnWhatsApp = () => {
     if (!form.name.trim() || !form.phone.trim() || !form.address.trim()) {
-      toast.error(
-        "Please fill in your Name, Phone, and Address before ordering on WhatsApp.",
-      );
+      toast.error("Please fill Name, Phone, and Address first.");
       return;
     }
     if (items.length === 0) {
@@ -134,12 +142,16 @@ export function CheckoutPage() {
   if (orderPlaced) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-        <div className="text-5xl mb-6">🙏</div>
+        <div className="text-5xl mb-6">\uD83D\uDE4F</div>
         <h2 className="font-display text-2xl font-bold text-primary mb-3">
-          Order Placed Successfully!
+          {paymentMethod === "upi"
+            ? "Payment Received!"
+            : "Order Placed Successfully!"}
         </h2>
         <p className="text-muted-foreground text-lg mb-8">
-          We will contact you soon.
+          {paymentMethod === "upi"
+            ? "Your order is marked as Paid. We will contact you soon."
+            : "We will contact you soon."}
         </p>
         <Button
           onClick={() => navigate({ to: "/products" })}
@@ -174,100 +186,176 @@ export function CheckoutPage() {
       </h1>
 
       <div className="grid md:grid-cols-2 gap-8">
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <Label htmlFor="name">Full Name *</Label>
-            <Input
-              id="name"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-              placeholder="Your full name"
-              className="mt-1"
-              data-ocid="checkout.name.input"
-            />
+        <div className="space-y-6">
+          {/* Customer Details */}
+          <div className="space-y-5">
+            <div>
+              <Label htmlFor="name">Full Name *</Label>
+              <Input
+                id="name"
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                required
+                placeholder="Your full name"
+                className="mt-1"
+                data-ocid="checkout.name.input"
+              />
+            </div>
+            <div>
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                required
+                placeholder="your@email.com"
+                className="mt-1"
+                data-ocid="checkout.email.input"
+              />
+            </div>
+            <div>
+              <Label htmlFor="phone">Phone Number *</Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={form.phone}
+                onChange={handleChange}
+                required
+                placeholder="+91 XXXXXXXXXX"
+                className="mt-1"
+                data-ocid="checkout.phone.input"
+              />
+            </div>
+            <div>
+              <Label htmlFor="address">Shipping Address *</Label>
+              <Textarea
+                id="address"
+                name="address"
+                value={form.address}
+                onChange={handleChange}
+                required
+                placeholder="Full delivery address..."
+                className="mt-1"
+                rows={4}
+                data-ocid="checkout.address.textarea"
+              />
+            </div>
           </div>
+
+          {/* Payment Method Selector */}
           <div>
-            <Label htmlFor="email">Email *</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              required
-              placeholder="your@email.com"
-              className="mt-1"
-              data-ocid="checkout.email.input"
-            />
-          </div>
-          <div>
-            <Label htmlFor="phone">Phone Number *</Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              value={form.phone}
-              onChange={handleChange}
-              required
-              placeholder="+91 XXXXXXXXXX"
-              className="mt-1"
-              data-ocid="checkout.phone.input"
-            />
-          </div>
-          <div>
-            <Label htmlFor="address">Shipping Address *</Label>
-            <Textarea
-              id="address"
-              name="address"
-              value={form.address}
-              onChange={handleChange}
-              required
-              placeholder="Full delivery address..."
-              className="mt-1"
-              rows={4}
-              data-ocid="checkout.address.textarea"
-            />
+            <Label className="text-base font-semibold mb-3 block">
+              Payment Method
+            </Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("cod")}
+                className={`border-2 rounded-lg p-3 text-sm font-medium transition-colors ${
+                  paymentMethod === "cod"
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border text-muted-foreground hover:border-primary/50"
+                }`}
+              >
+                Cash on Delivery
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod("upi")}
+                className={`border-2 rounded-lg p-3 text-sm font-medium transition-colors ${
+                  paymentMethod === "upi"
+                    ? "border-orange-500 bg-orange-50 text-orange-700"
+                    : "border-border text-muted-foreground hover:border-orange-300"
+                }`}
+              >
+                UPI Payment
+              </button>
+            </div>
           </div>
 
-          <Button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground uppercase tracking-wider text-sm"
-            data-ocid="checkout.place_order.submit_button"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing
-                Order...
-              </>
-            ) : (
-              "Place Order"
-            )}
-          </Button>
+          {/* COD */}
+          {paymentMethod === "cod" && (
+            <form onSubmit={handleCODSubmit} className="space-y-3">
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-accent hover:bg-accent/90 text-accent-foreground uppercase tracking-wider text-sm"
+                data-ocid="checkout.place_order.submit_button"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing
+                    Order...
+                  </>
+                ) : (
+                  "Place Order"
+                )}
+              </Button>
 
-          {/* Divider */}
-          <p className="text-xs text-center text-muted-foreground">— or —</p>
+              <p className="text-xs text-center text-muted-foreground">
+                — or —
+              </p>
 
-          {/* Order on WhatsApp button */}
-          <Button
-            type="button"
-            onClick={handleOrderOnWhatsApp}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold text-sm uppercase tracking-wider py-3 h-auto flex items-center justify-center gap-2"
-            data-ocid="checkout.whatsapp_order.button"
-          >
-            <MessageCircle className="h-5 w-5" />
-            Order on WhatsApp
-          </Button>
+              <Button
+                type="button"
+                onClick={handleOrderOnWhatsApp}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold text-sm uppercase tracking-wider py-3 h-auto flex items-center justify-center gap-2"
+                data-ocid="checkout.whatsapp_order.button"
+              >
+                <MessageCircle className="h-5 w-5" />
+                Order on WhatsApp
+              </Button>
 
-          <p className="text-xs text-center text-muted-foreground">
-            Opens WhatsApp with your order details to send directly to us.
-          </p>
-        </form>
+              <p className="text-xs text-center text-muted-foreground">
+                Opens WhatsApp with your order details.
+              </p>
+            </form>
+          )}
 
-        {/* Summary */}
+          {/* UPI */}
+          {paymentMethod === "upi" && (
+            <form onSubmit={handleUPIPaid} className="space-y-4">
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-5 text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Send payment via any UPI app
+                </p>
+                <p className="text-lg font-bold text-orange-700">
+                  Pay using UPI: 918391020810
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  (PhonePe, GPay, Paytm, or any UPI app)
+                </p>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold uppercase tracking-wider text-sm py-3 h-auto"
+                data-ocid="checkout.upi_paid.button"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                    Processing...
+                  </>
+                ) : (
+                  "I have paid"
+                )}
+              </Button>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Click after completing UPI payment. Order will be marked as
+                Paid.
+              </p>
+            </form>
+          )}
+        </div>
+
+        {/* Order Summary */}
         <div className="bg-card rounded-lg border border-border p-5">
           <h2 className="font-display text-lg font-bold text-foreground mb-4">
             Order Summary
@@ -286,7 +374,7 @@ export function CheckoutPage() {
                   </span>
                 </span>
                 <span className="font-medium">
-                  ₹
+                  \u20B9
                   {(
                     Number(item.priceCents * BigInt(item.quantity)) / 100
                   ).toFixed(2)}
@@ -297,7 +385,7 @@ export function CheckoutPage() {
           <Separator className="mb-3" />
           <div className="flex justify-between font-bold">
             <span>Total</span>
-            <span>₹{total}</span>
+            <span>\u20B9{total}</span>
           </div>
         </div>
       </div>

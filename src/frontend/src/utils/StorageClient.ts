@@ -487,104 +487,38 @@ export class StorageClient {
       methodName: "_caffeineStorageCreateCertificate",
       arg: args,
     });
-
-    const responseBody = result.response.body;
-    console.log(
-      "[StorageClient] getCertificate raw response body:",
-      responseBody,
-    );
-
-    // Handle v3 response format (preferred)
-    if (isV3ResponseBody(responseBody)) {
-      console.log("[StorageClient] Using v3 certificate");
-      return responseBody.certificate;
+    const respone = result.response.body;
+    if (isV3ResponseBody(respone)) {
+      console.log("Certificate:", respone.certificate);
+      return respone.certificate;
     }
-
-    // Handle v2 / legacy response format: decode certificate from reply.arg bytes
-    if (responseBody && (responseBody as any).reply?.arg) {
-      console.log("[StorageClient] Falling back to v2 reply.arg decoding");
-      try {
-        const replyArg = (responseBody as any).reply.arg;
-        const argBytes =
-          replyArg instanceof Uint8Array
-            ? replyArg
-            : new Uint8Array(Object.values(replyArg as Record<string, number>));
-        const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], argBytes);
-        if (decoded[0] instanceof Uint8Array) {
-          return decoded[0];
-        }
-        // decoded[0] might be an array of numbers
-        return new Uint8Array(decoded[0] as number[]);
-      } catch (decodeErr) {
-        console.error(
-          "[StorageClient] Failed to decode v2 reply.arg:",
-          decodeErr,
-        );
-        throw new Error(
-          `getCertificate: could not decode v2 reply. Raw response: ${JSON.stringify(responseBody)}`,
-        );
-      }
-    }
-
-    // If the backend returns a direct URL string (some gateway configs), wrap it.
-    if (typeof responseBody === "string") {
-      console.warn(
-        "[StorageClient] Backend returned a plain string instead of certificate bytes. This is unexpected but will not crash.",
-      );
-      throw new Error(
-        `getCertificate: backend returned a string response instead of certificate bytes: "${responseBody}". Check backend storage configuration.`,
-      );
-    }
-
-    throw new Error(
-      `getCertificate: unrecognised response format. Expected v3 or v2 body, got: ${JSON.stringify(responseBody)}`,
-    );
+    throw new Error("Expected v3 response body");
   }
 
-  /**
-   * Uploads bytes to blob storage.
-   *
-   * @param blobBytes   Raw bytes to upload
-   * @param contentType MIME type for the stored file (e.g. "image/webp"). Defaults to "application/octet-stream".
-   * @param onProgress  Optional progress callback receiving 0-100
-   * @returns           { hash } — the sha256 hash string of the stored blob
-   */
   public async putFile(
     blobBytes: Uint8Array,
-    contentType = "application/octet-stream",
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
-    // HTTP headers for the PUT request to the gateway (not stored with the file)
+    // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-
-    // Create a Blob from the bytes with the correct MIME type
+    // Create a Blob from the bytes
     const file = new Blob([new Uint8Array(blobBytes)], {
-      type: contentType,
+      type: "application/octet-stream",
     });
-
-    // File metadata headers stored with the blob tree — determines how the gateway serves the file
+    // File metadata headers that will be stored with the blob tree
     const fileHeaders: Headers = {
-      "Content-Type": contentType,
+      "Content-Type": "application/octet-stream",
       "Content-Length": file.size.toString(),
     };
-
-    console.log(
-      `[StorageClient] putFile: ${file.size} bytes, content-type: ${contentType}`,
-    );
 
     const { chunks, chunkHashes, blobHashTree } =
       await this.processFileForUpload(file, fileHeaders);
     const blobRootHash = blobHashTree.tree.hash;
     const hashString = blobRootHash.toShaString();
 
-    console.log(`[StorageClient] Blob hash: ${hashString}`);
-
     const certificateBytes = await this.getCertificate(hashString);
-    console.log(
-      `[StorageClient] Certificate obtained (${certificateBytes.byteLength} bytes)`,
-    );
 
     await this.storageGatewayClient.uploadBlobTree(
       blobHashTree,
@@ -594,8 +528,6 @@ export class StorageClient {
       this.projectId,
       certificateBytes,
     );
-    console.log("[StorageClient] Blob tree uploaded");
-
     await this.parallelUpload(
       chunks,
       chunkHashes,
@@ -603,8 +535,6 @@ export class StorageClient {
       httpHeaders,
       onProgress,
     );
-    console.log("[StorageClient] Chunks uploaded");
-
     return { hash: hashString };
   }
 
