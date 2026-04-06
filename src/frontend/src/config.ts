@@ -158,6 +158,7 @@ export async function createActorWithConfig(
   const uploadFile = async (file: ExternalBlob): Promise<Uint8Array> => {
     const { hash } = await storageClient.putFile(
       await file.getBytes(),
+      undefined,
       file.onProgress,
     );
     return new TextEncoder().encode(MOTOKO_DEDUPLICATION_SENTINEL + hash);

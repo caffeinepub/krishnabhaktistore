@@ -12,11 +12,10 @@ export function useActor() {
   const actorQuery = useQuery<backendInterface>({
     queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
     queryFn: async () => {
-      const isAuthenticated =
-        !!identity && !identity.getPrincipal().isAnonymous();
+      const isAuthenticated = !!identity;
 
       if (!isAuthenticated) {
-        // Return anonymous actor -- no _initializeAccessControlWithSecret needed
+        // Return anonymous actor if not authenticated
         return await createActorWithConfig();
       }
 
@@ -27,23 +26,13 @@ export function useActor() {
       };
 
       const actor = await createActorWithConfig(actorOptions);
-
-      // Only call _initializeAccessControlWithSecret for Internet Identity users
-      try {
-        const adminToken = getSecretParameter("caffeineAdminToken") || "";
-        await actor._initializeAccessControlWithSecret(adminToken);
-      } catch (err) {
-        // Non-fatal: if this fails the actor is still usable for public endpoints
-        console.warn(
-          "[useActor] _initializeAccessControlWithSecret failed:",
-          err,
-        );
-      }
-
+      const adminToken = getSecretParameter("caffeineAdminToken") || "";
+      await actor._initializeAccessControlWithSecret(adminToken);
       return actor;
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
+    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 

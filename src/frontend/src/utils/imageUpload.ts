@@ -115,6 +115,7 @@ export async function uploadImageFile(
     await agent.fetchRootKey().catch(console.error);
   }
 
+  // 5 constructor args: bucket, storageGatewayUrl, backendCanisterId, projectId, agent
   const storageClient = new StorageClient(
     config.bucket_name,
     config.storage_gateway_url,
@@ -126,8 +127,12 @@ export async function uploadImageFile(
   console.log("[ImageUpload] Calling storageClient.putFile()...");
   let hash: string;
   try {
-    // putFile signature: putFile(blobBytes, contentType?, onProgress?)
-    const result = await storageClient.putFile(compressedBytes, onProgress);
+    // putFile(blobBytes, contentType, onProgress?) — contentType is 2nd arg
+    const result = await storageClient.putFile(
+      compressedBytes,
+      OUTPUT_MIME,
+      onProgress,
+    );
     hash = result.hash;
     console.log("[ImageUpload] putFile succeeded. Hash:", hash);
   } catch (err) {
