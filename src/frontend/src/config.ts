@@ -156,6 +156,10 @@ export async function createActorWithConfig(
   const MOTOKO_DEDUPLICATION_SENTINEL = "!caf!";
 
   const uploadFile = async (file: ExternalBlob): Promise<Uint8Array> => {
+    // putFile(blobBytes, contentType?, onProgress?) -- pass undefined for contentType
+    // so the default "application/octet-stream" is used for generic blobs uploaded
+    // through the backend binding layer. Image uploads via imageUpload.ts pass
+    // the correct MIME type explicitly.
     const { hash } = await storageClient.putFile(
       await file.getBytes(),
       undefined,

@@ -18,7 +18,7 @@ const DOMAIN_SEPARATOR_FOR_METADATA = new TextEncoder().encode(
 );
 const DOMAIN_SEPARATOR_FOR_NODES = new TextEncoder().encode("ynode/");
 
-// Utility function for exponential backoff retry logic
+// Utility function for exponential backoff retry logic - retries on network/server errors only
 async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
   let lastError: Error | undefined;
 
@@ -28,8 +28,10 @@ async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
+      // Check if this error should be retried
       const shouldRetry = isRetriableError(error);
 
+      // On the final attempt or non-retriable error, throw the error
       if (attempt === MAX_RETRIES || !shouldRetry) {
         if (!shouldRetry && attempt < MAX_RETRIES) {
           console.warn(
@@ -39,6 +41,7 @@ async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
         throw error;
       }
 
+      // Calculate delay with exponential backoff and jitter
       const delay = Math.min(
         BASE_DELAY_MS * 2 ** attempt + Math.random() * 1000,
         MAX_DELAY_MS,
@@ -52,19 +55,25 @@ async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
     }
   }
 
+  // This should never happen due to the loop logic, but TypeScript needs it
   throw lastError || new Error("Unknown error occurred during retry attempts");
 }
 
 function isRetriableError(error: any): boolean {
   const errorMessage = error?.message?.toLowerCase() || "";
 
+  // Don't retry client errors (4xx except specific ones)
   if (error?.response?.status) {
     const status = error.response.status;
+    // Only retry these 4xx errors
     if (status === 408 || status === 429) return true;
+    // Don't retry other 4xx client errors
     if (status >= 400 && status < 500) return false;
+    // Retry 5xx server errors
     if (status >= 500) return true;
   }
 
+  // Retry network/SSL errors
   if (
     errorMessage.includes("ssl") ||
     errorMessage.includes("tls") ||
@@ -76,6 +85,7 @@ function isRetriableError(error: any): boolean {
     return true;
   }
 
+  // Don't retry validation/logic errors
   if (
     errorMessage.includes("validation") ||
     errorMessage.includes("invalid") ||
@@ -87,9 +97,11 @@ function isRetriableError(error: any): boolean {
     return false;
   }
 
+  // Default to retry for unknown errors (conservative approach for network issues)
   return true;
 }
 
+// Hash validation utility
 function validateHashFormat(hash: string, context: string): void {
   if (!hash) {
     throw new Error(`${context}: Hash cannot be empty`);
@@ -101,7 +113,7 @@ function validateHashFormat(hash: string, context: string): void {
     );
   }
 
-  const hexPart = hash.substring(SHA256_PREFIX.length);
+  const hexPart = hash.substring(SHA256_PREFIX.length); // Remove 'sha256:' prefix
   if (hexPart.length !== 64) {
     throw new Error(
       `${context}: Invalid hash format. Expected 64 hex characters after ${SHA256_PREFIX}, got ${hexPart.length} characters: ${hash}`,
@@ -155,11 +167,15 @@ class YHash {
   }
 
   static async fromHeaders(headers: Headers): Promise<YHash> {
+    // For each key,value, generate the header line "key: value\n" where the key and value are trimmed.
     const headerLines: string[] = [];
     for (const [key, value] of Object.entries(headers)) {
       headerLines.push(`${key.trim()}: ${value.trim()}\n`);
     }
+    // Sort the header lines alphabetically.
     headerLines.sort();
+
+    // Hash the header lines, with the metadata domain separator.
     const hash = await YHash.fromBytes(
       DOMAIN_SEPARATOR_FOR_METADATA,
       new TextEncoder().encode(headerLines.join("")),
@@ -259,18 +275,21 @@ class BlobHashTree {
     headers: Headers = {},
   ): Promise<BlobHashTree> {
     if (chunkHashes.length === 0) {
+      // To match rust, we have the hash of nothing
       const hex =
         "8b8e620f084e48da0be2287fd12c5aaa4dbe14b468fd2e360f48d741fe7628a0";
       const bytes = new TextEncoder().encode(hex);
       chunkHashes.push(new YHash(bytes));
     }
 
+    // Create leaf nodes for each chunk hash
     let level: TreeNode[] = chunkHashes.map((hash) => ({
       hash,
       left: null,
       right: null,
     }));
 
+    // Build tree bottom-up
     while (level.length > 1) {
       const nextLevel: TreeNode[] = [];
       for (let i = 0; i < level.length; i += 2) {
@@ -292,6 +311,7 @@ class BlobHashTree {
 
     const chunksRoot = level[0];
 
+    // If headers exist and have content, create combined tree
     if (headers && Object.keys(headers).length > 0) {
       const metadataRootHash = await YHash.fromHeaders(headers);
       const metadataRoot: TreeNode = {
@@ -345,6 +365,7 @@ class StorageGatewayClient {
   public async uploadChunk(
     params: UploadChunkParams,
   ): Promise<{ isComplete: boolean }> {
+    // Validate hash formats before sending to server (validation errors should not be retried)
     const blobHashString = params.blobRootHash.toShaString();
     const chunkHashString = params.chunkHash.toShaString();
     validateHashFormat(
@@ -357,6 +378,7 @@ class StorageGatewayClient {
     );
 
     return await withRetry(async () => {
+      // Use query parameters for metadata and raw bytes in body
       const queryParams = new URLSearchParams({
         owner_id: params.owner,
         blob_hash: blobHashString,
@@ -381,6 +403,7 @@ class StorageGatewayClient {
         const error = new Error(
           `Failed to upload chunk ${params.chunkIndex}: ${response.status} ${response.statusText} - ${errorText}`,
         );
+        // Add response status for retry logic
         (error as any).response = { status: response.status };
         throw error;
       }
@@ -402,6 +425,7 @@ class StorageGatewayClient {
     projectId: string,
     certificateBytes: Uint8Array,
   ): Promise<void> {
+    // Validate all hashes in the tree before sending to server (validation errors should not be retried)
     const treeJSON = blobHashTree.toJSON();
     validateHashFormat(treeJSON.tree.hash, "uploadBlobTree root hash");
     treeJSON.chunk_hashes.forEach((hash, index) => {
@@ -436,6 +460,7 @@ class StorageGatewayClient {
         const error = new Error(
           `Failed to upload blob tree: ${response.status} ${response.statusText} - ${errorText}`,
         );
+        // Add response status for retry logic
         (error as any).response = { status: response.status };
         throw error;
       }
@@ -456,89 +481,103 @@ export class StorageClient {
     this.storageGatewayClient = new StorageGatewayClient(storageGatewayUrl);
   }
 
+  /**
+   * Gets a certificate from the backend canister for the given hash.
+   * Handles both v3 (direct certificate field) and v2/legacy (Candid-encoded reply.arg) response formats.
+   */
   private async getCertificate(hash: string): Promise<Uint8Array> {
-    console.log("[StorageClient] Requesting certificate for hash:", hash);
+    console.log("[StorageClient] getCertificate called for hash:", hash);
     const args = IDL.encode([IDL.Text], [hash]);
-
-    let result: Awaited<ReturnType<typeof this.agent.call>>;
-    try {
-      result = await this.agent.call(this.backendCanisterId, {
-        methodName: "_caffeineStorageCreateCertificate",
-        arg: args,
-      });
-    } catch (callErr) {
-      console.error("[StorageClient] agent.call failed:", callErr);
-      throw callErr;
-    }
+    const result = await this.agent.call(this.backendCanisterId, {
+      methodName: "_caffeineStorageCreateCertificate",
+      arg: args,
+    });
 
     const responseBody = result.response.body;
     console.log(
-      "[StorageClient] Certificate response type:",
+      "[StorageClient] getCertificate response type:",
       typeof responseBody,
     );
 
-    // Handle v3 response (certificate field directly available)
+    // --- v3 response format: has a `certificate` field directly ---
     if (isV3ResponseBody(responseBody)) {
-      console.log("[StorageClient] Using v3 response body");
+      console.log(
+        "[StorageClient] Using v3 response format (certificate field)",
+      );
       return responseBody.certificate;
     }
 
-    // Handle v2 / legacy response: decode the reply arg via Candid
+    // --- v2/legacy response format: decode from Candid reply.arg bytes ---
     try {
       const replyArg = (responseBody as any)?.reply?.arg;
       if (replyArg) {
-        console.log("[StorageClient] Decoding v2 reply.arg via Candid");
-        const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], replyArg) as [number[]];
-        if (decoded?.[0]) {
-          return new Uint8Array(decoded[0]);
+        console.log(
+          "[StorageClient] Using v2/legacy response format (reply.arg)",
+        );
+        const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], replyArg);
+        if (decoded && decoded.length > 0) {
+          return new Uint8Array(decoded[0] as number[]);
         }
       }
     } catch (decodeErr) {
-      console.warn("[StorageClient] v2 Candid decode failed:", decodeErr);
+      console.warn("[StorageClient] v2 decode failed:", decodeErr);
     }
 
-    // Last resort: if body itself is an array/Uint8Array, use it directly
-    if (responseBody instanceof Uint8Array) {
-      console.log(
-        "[StorageClient] Using raw Uint8Array response body as certificate",
-      );
-      return responseBody;
-    }
-    if (Array.isArray(responseBody)) {
-      console.log(
-        "[StorageClient] Using raw array response body as certificate",
-      );
-      return new Uint8Array(responseBody as number[]);
+    // --- Last resort: if the body itself is an array/buffer, use it directly ---
+    if (responseBody && typeof responseBody === "object") {
+      const bodyAny = responseBody as any;
+      // Some backends return { certificate: Uint8Array } with lowercase
+      if (bodyAny.certificate instanceof Uint8Array) {
+        console.log("[StorageClient] Using certificate from response object");
+        return bodyAny.certificate;
+      }
+      if (Array.isArray(bodyAny.certificate)) {
+        console.log(
+          "[StorageClient] Using certificate array from response object",
+        );
+        return new Uint8Array(bodyAny.certificate);
+      }
     }
 
-    // Log the full response for diagnostics before throwing
     console.error(
-      "[StorageClient] Unrecognised certificate response:",
-      JSON.stringify(responseBody),
+      "[StorageClient] getCertificate: unrecognized response format",
+      responseBody,
     );
     throw new Error(
-      "[StorageClient] Could not extract certificate from backend response. " +
-        "Expected v3 certificate or v2 Candid-encoded bytes.",
+      "StorageClient.getCertificate: Could not extract certificate from backend response. " +
+        "Neither v3 (certificate field) nor v2 (reply.arg Candid) format was recognised.",
     );
   }
 
+  /**
+   * Uploads a blob to storage.
+   * @param blobBytes   Raw bytes to upload.
+   * @param contentType MIME type of the file (e.g. "image/webp"). Defaults to "application/octet-stream".
+   * @param onProgress  Optional progress callback (0-100).
+   */
   public async putFile(
     blobBytes: Uint8Array,
     contentType = "application/octet-stream",
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
     console.log(
-      `[StorageClient] putFile called: ${blobBytes.byteLength} bytes, contentType=${contentType}`,
+      "[StorageClient] putFile called. contentType:",
+      contentType,
+      "size:",
+      blobBytes.byteLength,
     );
 
-    // HTTP headers for gateway PUT requests
+    // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
 
-    const file = new Blob([new Uint8Array(blobBytes)], { type: contentType });
+    // Create a Blob from the bytes with the correct MIME type
+    const file = new Blob([new Uint8Array(blobBytes)], {
+      type: contentType,
+    });
 
-    // File metadata headers stored alongside the blob in the tree
+    // File metadata headers stored with the blob tree so the gateway serves correct Content-Type
     const fileHeaders: Headers = {
       "Content-Type": contentType,
       "Content-Length": file.size.toString(),
@@ -548,13 +587,10 @@ export class StorageClient {
       await this.processFileForUpload(file, fileHeaders);
     const blobRootHash = blobHashTree.tree.hash;
     const hashString = blobRootHash.toShaString();
-    console.log("[StorageClient] Blob hash:", hashString);
+    console.log("[StorageClient] Blob root hash:", hashString);
 
     const certificateBytes = await this.getCertificate(hashString);
-    console.log(
-      "[StorageClient] Certificate obtained, size:",
-      certificateBytes.byteLength,
-    );
+    console.log("[StorageClient] Certificate obtained, uploading blob tree...");
 
     await this.storageGatewayClient.uploadBlobTree(
       blobHashTree,
@@ -564,7 +600,7 @@ export class StorageClient {
       this.projectId,
       certificateBytes,
     );
-    console.log("[StorageClient] Blob tree uploaded");
+    console.log("[StorageClient] Blob tree uploaded. Uploading chunks...");
 
     await this.parallelUpload(
       chunks,
@@ -573,8 +609,7 @@ export class StorageClient {
       httpHeaders,
       onProgress,
     );
-    console.log("[StorageClient] Chunks uploaded. Hash:", hashString);
-
+    console.log("[StorageClient] All chunks uploaded. Hash:", hashString);
     return { hash: hashString };
   }
 
@@ -626,6 +661,7 @@ export class StorageClient {
         projectId: this.projectId,
         httpHeaders,
       });
+      // Use atomic increment to avoid race conditions
       const currentCompleted = ++completedChunks;
       if (onProgress != null) {
         const percentage =

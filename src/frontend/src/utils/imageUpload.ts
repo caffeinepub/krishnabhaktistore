@@ -77,6 +77,7 @@ export async function uploadImageFile(
   identity: Identity,
   onProgress?: (percentage: number) => void,
 ): Promise<string> {
+  // Step 1: Validate file type and size
   validateImageFile(file);
 
   if (identity.getPrincipal().isAnonymous()) {
@@ -92,6 +93,7 @@ export async function uploadImageFile(
     `${(file.size / 1024).toFixed(1)} KB`,
   );
 
+  // Step 2: Compress to WebP
   console.log("[ImageUpload] Compressing...");
   const compressedBlob = await compressImage(file);
   const compressedBytes = new Uint8Array(await compressedBlob.arrayBuffer());
@@ -99,6 +101,7 @@ export async function uploadImageFile(
     `[ImageUpload] Compressed: ${(compressedBytes.byteLength / 1024).toFixed(1)} KB (${OUTPUT_MIME})`,
   );
 
+  // Step 3: Load config
   const config = await loadConfig();
   console.log(
     "[ImageUpload] Config loaded. Bucket:",
@@ -107,6 +110,7 @@ export async function uploadImageFile(
     config.storage_gateway_url,
   );
 
+  // Step 4: Create agent with the admin identity
   const agent = new HttpAgent({
     host: config.backend_host,
     identity,
@@ -115,7 +119,7 @@ export async function uploadImageFile(
     await agent.fetchRootKey().catch(console.error);
   }
 
-  // 5 constructor args: bucket, storageGatewayUrl, backendCanisterId, projectId, agent
+  // Step 5: Create StorageClient (5 constructor args)
   const storageClient = new StorageClient(
     config.bucket_name,
     config.storage_gateway_url,
@@ -124,14 +128,14 @@ export async function uploadImageFile(
     agent,
   );
 
+  // Step 6: Upload via putFile(blobBytes, contentType, onProgress)
   console.log("[ImageUpload] Calling storageClient.putFile()...");
   let hash: string;
   try {
-    // putFile(blobBytes, contentType, onProgress?) — contentType is 2nd arg
     const result = await storageClient.putFile(
       compressedBytes,
-      OUTPUT_MIME,
-      onProgress,
+      OUTPUT_MIME, // contentType — 2nd arg, keeps the MIME type flowing through
+      onProgress, // progress callback — 3rd arg
     );
     hash = result.hash;
     console.log("[ImageUpload] putFile succeeded. Hash:", hash);
@@ -143,6 +147,7 @@ export async function uploadImageFile(
     throw err;
   }
 
+  // Step 7: Get the direct URL for the uploaded file
   const url = await storageClient.getDirectURL(hash);
   console.log("[ImageUpload] Upload complete. URL:", url);
   return url;
