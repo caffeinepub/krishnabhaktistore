@@ -67,7 +67,9 @@ actor {
     customerId : Principal;
   };
 
-  // Current full Order type (with upiTransactionId).
+  // Current full Order type -- upiTransactionId is optional (null = COD order).
+  // Making it optional prevents IDL decode errors when reading orders that
+  // were placed before this field was added to the schema.
   type Order = {
     id : Nat;
     customerName : Text;
@@ -79,10 +81,10 @@ actor {
     status : OrderStatus;
     createdAt : Time.Time;
     customerId : Principal;
-    upiTransactionId : Text;
+    upiTransactionId : ?Text;
   };
 
-  func orderFromV1(v1 : OrderV1, upiTxnId : Text) : Order = {
+  func orderFromV1(v1 : OrderV1, upiTxnId : ?Text) : Order = {
     id = v1.id;
     customerName = v1.customerName;
     customerEmail = v1.customerEmail;
@@ -140,7 +142,7 @@ actor {
   let products = Map.empty<Nat, Product>();
   // Stable orders map keeps the V1 schema for upgrade compatibility.
   let orders = Map.empty<Nat, OrderV1>();
-  // Supplemental stable map: orderId -> upiTransactionId (empty string = COD).
+  // Supplemental stable map: orderId -> upiTransactionId (null = COD).
   let ordersUpiTxn = Map.empty<Nat, Text>();
   let userProfiles = Map.empty<Principal, UserProfile>();
   // Phone number registry: token -> phone number
@@ -176,10 +178,7 @@ actor {
     switch (orders.get(id)) {
       case (null) { null };
       case (?v1) {
-        let txnId = switch (ordersUpiTxn.get(id)) {
-          case (null) { "" };
-          case (?t) { t };
-        };
+        let txnId = ordersUpiTxn.get(id); // ?Text -- null for COD orders
         ?orderFromV1(v1, txnId);
       };
     };
@@ -465,6 +464,7 @@ actor {
   };
 
   // Place Order - Public access (anyone can place an order)
+  // upiTransactionId is optional: null for COD, ?"txnId" for UPI
   public shared ({ caller }) func placeOrder(order : Order) : async Nat {
     let validatedItems = List.empty<OrderItem>();
     var totalAmount = 0;
@@ -507,9 +507,14 @@ actor {
     };
     orders.add(nextOrderId, newOrderV1);
 
-    // Store UPI transaction ID separately
-    if (order.upiTransactionId != "") {
-      ordersUpiTxn.add(nextOrderId, order.upiTransactionId);
+    // Store UPI transaction ID separately (only if provided)
+    switch (order.upiTransactionId) {
+      case (null) { /* COD order - no UPI txn */ };
+      case (?txnId) {
+        if (txnId != "") {
+          ordersUpiTxn.add(nextOrderId, txnId);
+        };
+      };
     };
 
     for (item in validatedItems.toArray().values()) {
@@ -536,10 +541,7 @@ actor {
     };
     let result = List.empty<Order>();
     for ((id, v1) in orders.entries()) {
-      let txnId = switch (ordersUpiTxn.get(id)) {
-        case (null) { "" };
-        case (?t) { t };
-      };
+      let txnId = ordersUpiTxn.get(id); // ?Text
       result.add(orderFromV1(v1, txnId));
     };
     result.toArray().sort(compareOrders);

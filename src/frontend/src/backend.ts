@@ -100,7 +100,7 @@ export interface Order {
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
-    upiTransactionId: string;
+    upiTransactionId: string | null;
 }
 export type Time = bigint;
 export interface OrderItem {
@@ -461,8 +461,15 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
-    upiTransactionId: string;
+    upiTransactionId: string | null;
 } {
+    // upiTransactionId is Candid optional: [] | [string] -- convert to string | null
+    const rawTxnId = (value as any).upiTransactionId;
+    const upiTransactionId: string | null = Array.isArray(rawTxnId) && rawTxnId.length > 0
+        ? rawTxnId[0]
+        : typeof rawTxnId === 'string' && rawTxnId !== ''
+            ? rawTxnId
+            : null;
     return {
         id: value.id,
         customerName: value.customerName,
@@ -474,7 +481,7 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
         customerId: value.customerId,
         items: value.items,
         customerEmail: value.customerEmail,
-        upiTransactionId: (value as any).upiTransactionId ?? ''
+        upiTransactionId,
     };
 }
 function from_candid_record_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
@@ -598,7 +605,7 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     customerId: Principal;
     items: Array<OrderItem>;
     customerEmail: string;
-    upiTransactionId: string;
+    upiTransactionId: string | null;
 }): {
     id: bigint;
     customerName: string;
@@ -610,8 +617,12 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
     customerId: Principal;
     items: Array<_OrderItem>;
     customerEmail: string;
-    upiTransactionId: string;
+    upiTransactionId: [] | [string];
 } {
+    // Convert string | null to Candid optional [] | [string]
+    const upiTransactionId: [] | [string] = value.upiTransactionId
+        ? [value.upiTransactionId]
+        : [];
     return {
         id: value.id,
         customerName: value.customerName,
@@ -623,7 +634,7 @@ function to_candid_record_n21(_uploadFile: (file: ExternalBlob) => Promise<Uint8
         customerId: value.customerId,
         items: value.items,
         customerEmail: value.customerEmail,
-        upiTransactionId: value.upiTransactionId ?? ''
+        upiTransactionId,
     };
 }
 function to_candid_variant_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): {

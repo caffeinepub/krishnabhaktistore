@@ -21,7 +21,7 @@ export interface Order {
   'customerId' : Principal,
   'items' : Array<OrderItem>,
   'customerEmail' : string,
-  'upiTransactionId' : string,
+  'upiTransactionId' : [] | [string],
 }
 export interface OrderItem {
   'productId' : bigint,
@@ -81,4 +81,3 @@ export interface _SERVICE {
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
 export declare const idlFactory: IDL.InterfaceFactory;
-export declare const init: (args: { IDL: typeof IDL }) => IDL.Type[];

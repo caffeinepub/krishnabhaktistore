@@ -481,105 +481,67 @@ export class StorageClient {
     this.storageGatewayClient = new StorageGatewayClient(storageGatewayUrl);
   }
 
-  /**
-   * Gets a certificate from the backend canister for the given hash.
-   * Handles both v3 (direct certificate field) and v2/legacy (Candid-encoded reply.arg) response formats.
-   */
   private async getCertificate(hash: string): Promise<Uint8Array> {
-    console.log("[StorageClient] getCertificate called for hash:", hash);
     const args = IDL.encode([IDL.Text], [hash]);
     const result = await this.agent.call(this.backendCanisterId, {
       methodName: "_caffeineStorageCreateCertificate",
       arg: args,
     });
-
-    const responseBody = result.response.body;
-    console.log(
-      "[StorageClient] getCertificate response type:",
-      typeof responseBody,
-    );
-
-    // --- v3 response format: has a `certificate` field directly ---
-    if (isV3ResponseBody(responseBody)) {
-      console.log(
-        "[StorageClient] Using v3 response format (certificate field)",
-      );
-      return responseBody.certificate;
+    const respone = result.response.body;
+    // Try v3 response format first
+    if (isV3ResponseBody(respone)) {
+      console.log("[StorageClient] Certificate (v3):", respone.certificate);
+      return respone.certificate;
     }
-
-    // --- v2/legacy response format: decode from Candid reply.arg bytes ---
-    try {
-      const replyArg = (responseBody as any)?.reply?.arg;
-      if (replyArg) {
-        console.log(
-          "[StorageClient] Using v2/legacy response format (reply.arg)",
-        );
-        const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], replyArg);
-        if (decoded && decoded.length > 0) {
-          return new Uint8Array(decoded[0] as number[]);
+    // Fallback: try v2/legacy format -- reply.arg contains Candid-encoded bytes
+    if (respone && typeof respone === "object" && "reply" in respone) {
+      const reply = (respone as any).reply;
+      if (reply && reply.arg instanceof Uint8Array && reply.arg.length > 0) {
+        try {
+          const decoded = IDL.decode([IDL.Vec(IDL.Nat8)], reply.arg);
+          if (decoded.length > 0 && decoded[0] instanceof Uint8Array) {
+            console.log("[StorageClient] Certificate (v2 legacy)");
+            return decoded[0] as Uint8Array;
+          }
+        } catch {
+          // Candid decode failed -- fall through to next check
         }
       }
-    } catch (decodeErr) {
-      console.warn("[StorageClient] v2 decode failed:", decodeErr);
     }
-
-    // --- Last resort: if the body itself is an array/buffer, use it directly ---
-    if (responseBody && typeof responseBody === "object") {
-      const bodyAny = responseBody as any;
-      // Some backends return { certificate: Uint8Array } with lowercase
-      if (bodyAny.certificate instanceof Uint8Array) {
-        console.log("[StorageClient] Using certificate from response object");
-        return bodyAny.certificate;
-      }
-      if (Array.isArray(bodyAny.certificate)) {
-        console.log(
-          "[StorageClient] Using certificate array from response object",
-        );
-        return new Uint8Array(bodyAny.certificate);
+    // Last resort: check if body itself has a certificate array
+    if (respone && typeof respone === "object" && "certificate" in respone) {
+      const cert = (respone as any).certificate;
+      if (cert instanceof Uint8Array) {
+        console.log("[StorageClient] Certificate (body.certificate)");
+        return cert;
       }
     }
-
-    console.error(
-      "[StorageClient] getCertificate: unrecognized response format",
-      responseBody,
-    );
+    console.error("[StorageClient] Unrecognised response body:", respone);
     throw new Error(
-      "StorageClient.getCertificate: Could not extract certificate from backend response. " +
-        "Neither v3 (certificate field) nor v2 (reply.arg Candid) format was recognised.",
+      "StorageClient: Could not extract certificate from backend response. " +
+        "Response format not recognised (tried v3, v2/legacy, and body.certificate).",
     );
   }
 
-  /**
-   * Uploads a blob to storage.
-   * @param blobBytes   Raw bytes to upload.
-   * @param contentType MIME type of the file (e.g. "image/webp"). Defaults to "application/octet-stream".
-   * @param onProgress  Optional progress callback (0-100).
-   */
   public async putFile(
     blobBytes: Uint8Array,
-    contentType = "application/octet-stream",
+    contentType?: string,
     onProgress?: (percentage: number) => void,
   ): Promise<{ hash: string }> {
-    console.log(
-      "[StorageClient] putFile called. contentType:",
-      contentType,
-      "size:",
-      blobBytes.byteLength,
-    );
-
+    const mimeType = contentType || "application/octet-stream";
     // HTTP headers for fetch requests (used for the PUT request to gateway)
     const httpHeaders: Headers = {
       "Content-Type": "application/json",
     };
-
-    // Create a Blob from the bytes with the correct MIME type
+    // Create a Blob from the bytes using the correct MIME type
     const file = new Blob([new Uint8Array(blobBytes)], {
-      type: contentType,
+      type: mimeType,
     });
-
-    // File metadata headers stored with the blob tree so the gateway serves correct Content-Type
+    // File metadata headers that will be stored with the blob tree
+    // Using the correct MIME type ensures the storage gateway serves the file
+    // with the right Content-Type header (e.g. image/webp instead of octet-stream)
     const fileHeaders: Headers = {
-      "Content-Type": contentType,
+      "Content-Type": mimeType,
       "Content-Length": file.size.toString(),
     };
 
@@ -587,10 +549,8 @@ export class StorageClient {
       await this.processFileForUpload(file, fileHeaders);
     const blobRootHash = blobHashTree.tree.hash;
     const hashString = blobRootHash.toShaString();
-    console.log("[StorageClient] Blob root hash:", hashString);
 
     const certificateBytes = await this.getCertificate(hashString);
-    console.log("[StorageClient] Certificate obtained, uploading blob tree...");
 
     await this.storageGatewayClient.uploadBlobTree(
       blobHashTree,
@@ -600,8 +560,6 @@ export class StorageClient {
       this.projectId,
       certificateBytes,
     );
-    console.log("[StorageClient] Blob tree uploaded. Uploading chunks...");
-
     await this.parallelUpload(
       chunks,
       chunkHashes,
@@ -609,7 +567,6 @@ export class StorageClient {
       httpHeaders,
       onProgress,
     );
-    console.log("[StorageClient] All chunks uploaded. Hash:", hashString);
     return { hash: hashString };
   }
 

@@ -107,7 +107,9 @@ export function CheckoutPage() {
         totalAmount: totalCents,
         status,
         createdAt: 0n,
-        upiTransactionId: upiTransactionId,
+        // upiTransactionId is optional (?Text in Motoko = [] | [string] in Candid).
+        // Pass null (empty optional) for COD, or the txn ID string for UPI orders.
+        upiTransactionId: upiTransactionId ? upiTransactionId : null,
       } satisfies Order;
 
       await actor.placeOrder(order);
